@@ -1,0 +1,139 @@
+{
+  "_meta": {
+    "description": "Power House satellite telemetry state file. Updated every 0.5s by satellite_process.py. Read by dashboard/app.py.",
+    "coordinate_frame": "ECI (Earth-Centered Inertial)",
+    "position_unit": "km",
+    "velocity_unit": "km/s",
+    "angle_unit": "degrees",
+    "last_updated_by": "satellite_process.py"
+  },
+  "identity": {
+    "name": "Power House",
+    "norad_id": "PWRHS1",
+    "international_designator": "2026-001A",
+    "owner": "IN-SPACe",
+    "launch_date": "2026-01-15",
+    "mission_type": "Earth Observation"
+  },
+  "timestamp": "2026-03-07T01:48:27.360686Z",
+  "sim_time_seconds": 310300.0,
+  "orbit_number": 1,
+  "orbital_elements": {
+    "semi_major_axis_km": 6921.0,
+    "eccentricity": 0.0001,
+    "inclination_deg": 97.6,
+    "raan_deg": 48.548,
+    "arg_perigee_deg": 77.7597,
+    "mean_anomaly_deg": 302.8556,
+    "mean_motion_rev_per_day": 15.0782,
+    "period_min": 95.502
+  },
+  "eci_state": {
+    "pos_x_km": 4529.7387,
+    "pos_y_km": 4641.994,
+    "pos_z_km": 2414.2087,
+    "vel_x_kms": -1.06439,
+    "vel_y_kms": -2.624314,
+    "vel_z_kms": 7.04125
+  },
+  "derived_position": {
+    "altitude_km": 549.625,
+    "latitude_deg": 20.4165,
+    "longitude_deg": -170.7567,
+    "speed_kms": 7.58941,
+    "local_solar_time": "23:36",
+    "sub_satellite_point": [
+      20.4165,
+      -170.7567
+    ]
+  },
+  "health": {
+    "fuel_pct": 84.82,
+    "fuel_kg_remaining": 1.6964,
+    "fuel_kg_total": 2.0,
+    "battery_pct": 86.389,
+    "battery_voltage_v": 28.291,
+    "solar_power_w": 34.53,
+    "power_draw_w": 28.0,
+    "temperature_bus_c": 24.74,
+    "temperature_battery_c": 18.79,
+    "temperature_propulsion_c": 3.13,
+    "thermal_state": "NOMINAL"
+  },
+  "adcs": {
+    "attitude_mode": "NADIR_POINTING",
+    "attitude_quaternion": [
+      0.88759,
+      0.0,
+      0.46063,
+      0.0
+    ],
+    "angular_rate_x_degs": 0.00194,
+    "angular_rate_y_degs": 0.001,
+    "angular_rate_z_degs": 0.06283,
+    "pointing_error_deg": 0.0641,
+    "reaction_wheel_rpm_x": 1986.3,
+    "reaction_wheel_rpm_y": 0.3,
+    "reaction_wheel_rpm_z": 4276.6,
+    "magnetometer_x_ut": 22.44,
+    "magnetometer_y_ut": -15.43,
+    "magnetometer_z_ut": 45.67
+  },
+  "propulsion": {
+    "thruster_active": false,
+    "burn_duration_remaining_s": 0.0,
+    "last_burn_dv_ms": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "last_burn_utc": null,
+    "last_burn_magnitude_ms": 0.0,
+    "tank_pressure_bar": 17.437,
+    "valve_state": "CLOSED",
+    "total_dv_used_ms": 0.0
+  },
+  "communications": {
+    "ground_contact": true,
+    "ground_station": "ISRO Bengaluru",
+    "link_margin_db": 4.0,
+    "uplink_rate_kbps": 9.6,
+    "downlink_rate_kbps": 38.4,
+    "doppler_shift_hz": 2912.6,
+    "elevation_angle_deg": 90.0,
+    "contact_duration_min": 8.2
+  },
+  "environment": {
+    "in_eclipse": false,
+    "eclipse_fraction": 0.38,
+    "solar_flux_sfu": 146.12,
+    "magnetic_field_ut": 27.74,
+    "atomic_oxygen_flux": 4703358140.548,
+    "radiation_dose_mrad_hr": 15.29,
+    "atmospheric_density_kgm3": 2.9833061781949987e-13,
+    "drag_acceleration_ms2": 1.3229927953955399e-13
+  },
+  "mission": {
+    "phase": "nominal",
+    "mode": "SCIENCE",
+    "payload_active": true,
+    "data_stored_gb": 64.0,
+    "data_capacity_gb": 64.0,
+    "anomaly_count": 0,
+    "last_anomaly": null,
+    "uptime_hours": 86.1944
+  },
+  "acas": {
+    "active": true,
+    "last_cycle_utc": "2026-03-07T01:48:27Z",
+    "cycle_count": 5171,
+    "threats_tracked": 0,
+    "maneuver_active": false,
+    "last_alert_level": "GREEN",
+    "last_dv_vector": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}
