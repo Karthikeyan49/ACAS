@@ -1,0 +1,45 @@
+[project]
+name            = "acas"
+version         = "2.0.0"
+description     = "Autonomous Collision Avoidance System"
+readme          = "README.md"
+requires-python = ">=3.10"
+license         = { text = "MIT" }
+authors         = [{ name = "Power House Team" }]
+
+[project.scripts]
+acas-simulator  = "simulator.orbital:main"
+acas-controller = "core.controller:main"
+acas-dashboard  = "dashboard.app:main"
+acas-train      = "model.train:main"
+acas-api        = "api.endpoint:main"
+
+[build-system]
+requires      = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["core*", "data*", "model*", "pipeline*",
+           "simulator*", "dashboard*", "api*"]
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+python_files = ["test_*.py"]
+python_funcs = ["test_*"]
+addopts      = "-v --tb=short"
+
+[tool.black]
+line-length               = 100
+target-version            = ["py310", "py311"]
+skip-string-normalization = true
+
+[tool.isort]
+profile           = "black"
+line_length       = 100
+known_first_party = ["core", "data", "model", "pipeline",
+                     "simulator", "dashboard", "api"]
+
+[tool.mypy]
+python_version         = "3.10"
+ignore_missing_imports = true

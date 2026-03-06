@@ -1,0 +1,30 @@
+# ACAS Operational Thresholds — edit here, not in source code.
+
+alerts:
+  green:  1.0e-5
+  yellow: 1.0e-4
+  orange: 1.0e-3
+  red:    1.0e-3
+
+fuel_threshold_scale:
+  fuel_above_50pct: 1.0
+  fuel_above_30pct: 3.0
+  fuel_above_15pct: 8.0
+  fuel_below_15pct: 50.0
+
+screening_km: 5.0
+tle_stale_threshold_hours: 48
+tle_inflation_cap: 5.0
+target_miss_distance_km:  5.0
+min_dv_ms:                0.1
+altitude_floor_margin_km: 20.0
+battery_low_threshold_pct: 20.0
+battery_inflation_factor:  1.5
+
+lgbm:
+  high_risk_percentile:   0.80
+  classifier_threshold:   0.65
+  risk_score_emergency:  -4.0
+  risk_score_manoeuvre:  -5.0
+  risk_score_monitoring: -6.0
+  risk_score_watch:      -8.0

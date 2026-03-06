@@ -1,16 +1,47 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# data/conjunction_finder.py
-#
-# PURPOSE:
-#   Compares your satellite's 24-hour trajectory against every object
-#   in the catalog. Finds the Time of Closest Approach (TCA) and the
-#   minimum distance (miss distance) for every pair.
-#   Flags anything coming within 5km as a conjunction event.
-#
-# CALLED BY:
-#   onboard/acas_controller.py  — every 60 seconds in the main loop
-# ─────────────────────────────────────────────────────────────────────────────
+"""
+data/conjunction_finder.py
+══════════════════════════════════════════════════════════════════════════════
+WHAT THIS FILE IS
+    Scans your satellite's 24-hour trajectory against every catalog object.
+    Finds the Time of Closest Approach (TCA) and miss distance for each pair.
+    Returns all events with miss_km < 5 km, sorted soonest first.
 
+CALLED FROM
+    core/controller.py   ConjunctionFinder().find_all(my_traj, catalog)
+
+CALLS INTO
+    numpy
+    Nothing from this project.
+
+WHAT IT PROVIDES
+    ConjunctionFinder
+        SCREEN_KM = 5.0
+        find_all(your_traj, catalog) → list[dict]
+            your_traj   1,440 state dicts from OrbitPropagator.get_trajectory()
+            catalog     list from TLEFetcher.parse_to_propagators()
+            returns     conjunction dicts sorted by tca_hours (soonest first)
+
+CONJUNCTION DICT FORMAT (one per event — consumed by model/lgbm_engine.py)
+    object_id      str         NORAD catalog ID
+    object_name    str         e.g. "COSMOS 2251 DEB"
+    object_type    str         "DEBRIS" | "PAYLOAD" | "ROCKET_BODY"
+    miss_km        float       minimum separation at TCA (km)
+    tca_hours      float       hours until Time of Closest Approach
+    tca_time       datetime    UTC time of TCA
+    rel_pos        np.array    relative position at TCA (km)
+    rel_vel        np.array    relative velocity at TCA (km/s)
+    rel_speed_kms  float       scalar closing speed (km/s)
+    tle_stale      bool        True if TLE age > 48h
+    tle_age_hours  float       hours since TLE epoch
+
+ALGORITHM
+    Brute-force minimum distance over 1,440 time steps.
+    Same method as NASA CARA initial screening pass.
+
+MIGRATED FROM
+    satellite-acas/data/conjunction_finder.py  — no import changes
+══════════════════════════════════════════════════════════════════════════════
+"""
 import numpy as np
 from datetime import datetime
 

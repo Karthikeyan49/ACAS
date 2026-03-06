@@ -1,14 +1,49 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# data/tle_fetcher.py
-#
-# PURPOSE:
-#   1. TLEFetcher  — logs into Space-Track.org and downloads real TLE data
-#   2. OrbitPropagator — takes a TLE and computes position/velocity at any time
-#
-# CALLED BY:
-#   onboard/acas_controller.py  — at startup to build the catalog
-# ─────────────────────────────────────────────────────────────────────────────
+"""
+data/tle_fetcher.py
+══════════════════════════════════════════════════════════════════════════════
+WHAT THIS FILE IS
+    Two classes for obtaining and propagating orbital data from the US Space
+    Force satellite catalog (Space-Track.org).
 
+CALLED FROM
+    core/controller.py   TLEFetcher(user, pass)
+                         OrbitPropagator(line1, line2)
+
+CALLS INTO
+    requests    HTTP session to Space-Track.org
+    sgp4        Satrec.twoline2rv(), sat.sgp4(jd, fr)
+    numpy
+    Nothing from this project.
+
+WHAT IT PROVIDES
+    OrbitPropagator(tle1, tle2, age_hours)
+        get_state(dt) → {pos: np.array km, vel: np.array km/s,
+                          time: datetime, stale: bool}
+            ECI-frame position/velocity at datetime dt.
+            Returns None on SGP4 error.
+        get_trajectory(hours=24, step_min=1) → list[dict]
+            1,440 state snapshots over 24h at 1-min steps.
+            This list is what ConjunctionFinder compares against.
+
+    TLEFetcher(username, password)
+        get_leo_debris(limit=200) → list
+            Downloads TLE records for LEO objects
+            (MEAN_MOTION > 11.25 rev/day, ECCENTRICITY < 0.25).
+        parse_to_propagators(tle_data) → list[dict]
+            Each dict: {id, name, type, line1, line2,
+                        age_hours, stale, propagator: OrbitPropagator}
+        refresh_catalog(catalog) → list[dict]
+            Re-downloads TLEs every 90 min to prevent staleness.
+
+SPACE-TRACK API
+    Auth   POST https://www.space-track.org/ajaxauth/login
+    Query  GET  /basicspacedata/query/class/gp/...
+    Free account: https://www.space-track.org/auth/createAccount
+
+MIGRATED FROM
+    satellite-acas/data/tle_fetcher.py  — no import changes
+══════════════════════════════════════════════════════════════════════════════
+"""
 import requests
 import numpy as np
 from datetime import datetime, timedelta

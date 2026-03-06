@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACAS — Workflow & Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080c14;
+    --surface:  #0d1421;
+    --border:   #1a2640;
+    --text:     #c8d8f0;
+    --dim:      #5a7090;
+    --green:    #00e87a;
+    --yellow:   #ffd84d;
+    --orange:   #ff8c2a;
+    --red:      #ff2255;
+    --blue:     #4da6ff;
+    --cyan:     #00d4ff;
+    --purple:   #a078ff;
+    --accent:   #00d4ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── GRID BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ── HEADER ── */
+  .header {
+    text-align: center;
+    padding: 48px 0 56px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 56px;
+  }
+  .header .badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--cyan);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    font-size: clamp(36px, 5vw, 60px);
+    font-weight: 800;
+    letter-spacing: -2px;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .header h1 span { color: var(--cyan); }
+  .header p {
+    color: var(--dim);
+    font-size: 15px;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  /* ── SECTION TITLES ── */
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border), transparent);
+  }
+
+  /* ── STEP CARDS (workflow) ── */
+  .workflow { display: flex; flex-direction: column; gap: 0; margin-bottom: 64px; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 0 24px;
+    position: relative;
+  }
+
+  .step-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .step-num {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-line {
+    width: 2px;
+    flex: 1;
+    min-height: 24px;
+    margin: 4px 0;
+  }
+
+  .step:last-child .step-line { display: none; }
+
+  .step-body {
+    padding-bottom: 32px;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding-top: 10px;
+  }
+
+  .step-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .step-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .step-desc {
+    color: var(--dim);
+    font-size: 13px;
+    margin-bottom: 14px;
+    line-height: 1.7;
+  }
+
+  /* ── CODE BLOCKS ── */
+  .cmd-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid;
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin: 8px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .cmd-block .comment { color: var(--dim); }
+  .cmd-block .cmd { color: var(--green); }
+  .cmd-block .flag { color: var(--yellow); }
+  .cmd-block .path { color: var(--cyan); }
+  .cmd-block .output { color: var(--dim); font-style: italic; }
+
+  /* ── INFO PILLS ── */
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--dim);
+  }
+  .pill.file { color: var(--cyan); border-color: rgba(0,212,255,0.2); }
+  .pill.time { color: var(--yellow); border-color: rgba(255,216,77,0.2); }
+  .pill.out  { color: var(--green);  border-color: rgba(0,232,122,0.2); }
+  .pill.warn { color: var(--orange); border-color: rgba(255,140,42,0.2); }
+
+  /* ── ARCHITECTURE DIAGRAM ── */
+  .arch-wrap { margin-bottom: 64px; }
+
+  .arch-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 40px 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .arch-diagram::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(0,212,255,0.05), transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Layers */
+  .layer {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 16px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .layer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-align: right;
+    padding-right: 16px;
+    border-right: 2px solid var(--border);
+    line-height: 1.4;
+  }
+  .layer-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid;
+    border-radius: 4px;
+    padding: 8px 14px;
+    min-width: 130px;
+    transition: all 0.2s;
+  }
+  .node:hover {
+    background: rgba(255,255,255,0.06);
+    transform: translateY(-1px);
+  }
+  .node-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  .node-file {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .node-desc {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
+  /* color themes per layer */
+  .node.input  { border-color: rgba(160,120,255,0.4); }
+  .node.input  .node-name { color: var(--purple); }
+  .node.data   { border-color: rgba(0,212,255,0.35); }
+  .node.data   .node-name { color: var(--cyan); }
+  .node.model  { border-color: rgba(77,166,255,0.35); }
+  .node.model  .node-name { color: var(--blue); }
+  .node.core   { border-color: rgba(255,216,77,0.35); }
+  .node.core   .node-name { color: var(--yellow); }
+  .node.output { border-color: rgba(0,232,122,0.35); }
+  .node.output .node-name { color: var(--green); }
+  .node.store  { border-color: rgba(255,140,42,0.35); }
+  .node.store  .node-name { color: var(--orange); }
+
+  /* Arrow connector */
+  .arch-arrow {
+    text-align: center;
+    padding: 6px 0 6px 136px;
+    color: var(--border);
+    font-size: 18px;
+    position: relative;
+  }
+  .arch-arrow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    margin-left: 8px;
+  }
+
+  /* ── DECISION TREE ── */
+  .decision-wrap { margin-bottom: 64px; }
+
+  .decision-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .alert-col {
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid;
+  }
+
+  .alert-header {
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .alert-body { padding: 14px 16px; }
+
+  .alert-row {
+    font-size: 12px;
+    color: var(--dim);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+  .alert-row strong {
+    display: block;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .alert-row .val { color: var(--text); }
+
+  .col-green  { border-color: rgba(0,232,122,0.3); }
+  .col-green  .alert-header { background: rgba(0,232,122,0.08); color: var(--green); }
+  .col-yellow { border-color: rgba(255,216,77,0.3); }
+  .col-yellow .alert-header { background: rgba(255,216,77,0.08); color: var(--yellow); }
+  .col-orange { border-color: rgba(255,140,42,0.3); }
+  .col-orange .alert-header { background: rgba(255,140,42,0.08); color: var(--orange); }
+  .col-red    { border-color: rgba(255,34,85,0.3); }
+  .col-red    .alert-header { background: rgba(255,34,85,0.08); color: var(--red); }
+
+  /* ── FILE TABLE ── */
+  .file-table-wrap { margin-bottom: 64px; }
+
+  .file-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .file-row {
+    display: grid;
+    grid-template-columns: 240px 80px 1fr;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    transition: background 0.15s;
+  }
+  .file-row:hover { background: rgba(255,255,255,0.03); }
+
+  .file-row.header-row {
+    background: rgba(0,212,255,0.04);
+    border-color: rgba(0,212,255,0.2);
+  }
+  .file-row.header-row .fc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+
+  .fc {
+    padding: 10px 14px;
+    font-size: 13px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+  }
+  .fc:last-child { border-right: none; }
+
+  .fc.fname {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+  }
+
+  .badge-action {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .ba-copy   { background: rgba(0,232,122,0.12); color: var(--green); }
+  .ba-change { background: rgba(255,216,77,0.12); color: var(--yellow); }
+  .ba-rework { background: rgba(255,140,42,0.12); color: var(--orange); }
+  .ba-new    { background: rgba(0,212,255,0.12);  color: var(--cyan); }
+  .ba-delete { background: rgba(255,34,85,0.10);  color: var(--red); }
+  .ba-train  { background: rgba(160,120,255,0.12); color: var(--purple); }
+
+  .fc.fdesc { color: var(--dim); font-size: 12px; }
+
+  /* ── LOG OUTPUT ── */
+  .log-wrap { margin-bottom: 64px; }
+  .log-box {
+    background: #050810;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  .log-box .l-ts  { color: #2a4060; }
+  .log-box .l-inf { color: #1a6040; }
+  .log-box .l-wrn { color: #604010; }
+  .log-box .l-err { color: #601020; }
+  .log-box .l-msg { color: var(--text); }
+  .log-box .l-grn { color: var(--green); }
+  .log-box .l-yel { color: var(--yellow); }
+  .log-box .l-org { color: var(--orange); }
+  .log-box .l-red { color: var(--red); }
+  .log-box .l-dim { color: var(--dim); }
+  .log-box .l-val { color: var(--cyan); }
+
+  /* ── SCENARIOS TABLE ── */
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    margin-bottom: 64px;
+  }
+  .sc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+    border-left: 3px solid;
+  }
+  .sc-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 13px;
+    color: #fff;
+    margin-bottom: 3px;
+  }
+  .sc-norad { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--dim); }
+  .sc-desc  { font-size: 12px; color: var(--dim); margin: 6px 0; line-height: 1.4; }
+  .sc-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sc-stat  {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .sc-stat span { color: var(--text); }
+  .sc-card.GREEN  { border-left-color: var(--green); }
+  .sc-card.YELLOW { border-left-color: var(--yellow); }
+  .sc-card.ORANGE { border-left-color: var(--orange); }
+  .sc-card.RED    { border-left-color: var(--red); }
+  .sc-alert {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .sc-card.GREEN  .sc-alert { color: var(--green); }
+  .sc-card.YELLOW .sc-alert { color: var(--yellow); }
+  .sc-card.ORANGE .sc-alert { color: var(--orange); }
+  .sc-card.RED    .sc-alert { color: var(--red); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .decision-grid { grid-template-columns: 1fr 1fr; }
+    .file-row { grid-template-columns: 1fr 70px; }
+    .file-row .fc.fdesc { display: none; }
+    .layer { grid-template-columns: 80px 1fr; }
+    .layer-label { font-size: 9px; }
+  }
+  @media (max-width: 480px) {
+    .decision-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="badge">POWER HOUSE SATELLITE · IN-SPACe · SSO 550km</div>
+    <h1>ACAS <span>Workflow</span> &amp; Architecture</h1>
+    <p>Full run guide, system diagram, decision tree, and file map for the Autonomous Collision Avoidance System v2.0</p>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 1 — SYSTEM ARCHITECTURE DIAGRAM
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="arch-wrap">
+    <div class="section-title">01 · System Architecture</div>
+
+    <div class="arch-diagram">
+
+      <!-- INPUTS -->
+      <div class="layer">
+        <div class="layer-label">EXTERNAL<br>INPUTS</div>
+        <div class="layer-content">
+          <div class="node input">
+            <div class="node-name">Space-Track.org</div>
+            <div class="node-file">TLE catalog API</div>
+            <div class="node-desc">27,000+ objects · free account</div>
+          </div>
+          <div class="node input">
+            <div class="node-name">satellite_model.json</div>
+            <div class="node-file">data_files/</div>
+            <div class="node-desc">live telemetry · written every 1s</div>
+          </div>
+          <div class="node input">
+            <div class="node-name">CDM Training CSV</div>
+            <div class="node-file">data_files/</div>
+            <div class="node-desc">162,634 rows · 103 features</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓ <span class="arch-arrow-label">TLE lines · satellite health state · raw conjunction data</span></div>
+
+      <!-- DATA LAYER -->
+      <div class="layer">
+        <div class="layer-label">DATA<br>LAYER</div>
+        <div class="layer-content">
+          <div class="node data">
+            <div class="node-name">tle_fetcher.py</div>
+            <div class="node-file">data/</div>
+            <div class="node-desc">TLEFetcher · OrbitPropagator · SGP4</div>
+          </div>
+          <div class="node data">
+            <div class="node-name">conjunction_finder.py</div>
+            <div class="node-file">data/</div>
+            <div class="node-desc">TCA scan · 5km screen · 24h window</div>
+          </div>
+          <div class="node data">
+            <div class="node-name">data_pipeline.py</div>
+            <div class="node-file">data/</div>
+            <div class="node-desc">impute · clip · 35+ features · encode</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓ <span class="arch-arrow-label">conjunction dict {miss_km, tca_hours, rel_pos, rel_vel, tle_stale …}</span></div>
+
+      <!-- MODEL LAYER -->
+      <div class="layer">
+        <div class="layer-label">MODEL<br>LAYER</div>
+        <div class="layer-content">
+          <div class="node model">
+            <div class="node-name">lgbm_engine.py</div>
+            <div class="node-file">model/</div>
+            <div class="node-desc">conj dict → 103 CDM features</div>
+          </div>
+          <div class="node model">
+            <div class="node-name">SatelliteRiskRegressor</div>
+            <div class="node-file">model/lgbm_model.py</div>
+            <div class="node-desc">→ risk_score  log₁₀(Pc)</div>
+          </div>
+          <div class="node model">
+            <div class="node-name">SatelliteRiskClassifier</div>
+            <div class="node-file">model/lgbm_model.py</div>
+            <div class="node-desc">→ high_risk_probability</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓ <span class="arch-arrow-label">raw_pc  float [0.0 – 1.0]  unadjusted collision probability</span></div>
+
+      <!-- SCORING LAYER -->
+      <div class="layer">
+        <div class="layer-label">SCORING<br>LAYER</div>
+        <div class="layer-content">
+          <div class="node core">
+            <div class="node-name">risk_scorer.py</div>
+            <div class="node-file">core/</div>
+            <div class="node-desc">6 limits · TLE age · fuel · battery · altitude · path · phase</div>
+          </div>
+          <div class="node core">
+            <div class="node-name">Assessment</div>
+            <div class="node-file">dataclass</div>
+            <div class="node-desc">adjusted_pc · alert · dv_vector · limitations_hit</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓ <span class="arch-arrow-label">Assessment → alert level + ΔV vector + decision text</span></div>
+
+      <!-- DECISION LAYER -->
+      <div class="layer">
+        <div class="layer-label">DECISION<br>LAYER</div>
+        <div class="layer-content">
+          <div class="node core">
+            <div class="node-name">controller.py</div>
+            <div class="node-file">core/</div>
+            <div class="node-desc">60s loop · act on alert level</div>
+          </div>
+          <div class="node core">
+            <div class="node-name">maneuver_planner.py</div>
+            <div class="node-file">core/</div>
+            <div class="node-desc">PPO RL agent · geometric fallback</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↓ <span class="arch-arrow-label">ΔV vector (m/s) → thruster · burn logged to black box</span></div>
+
+      <!-- PRESENTATION LAYER -->
+      <div class="layer">
+        <div class="layer-label">PRESENTATION<br>LAYER</div>
+        <div class="layer-content">
+          <div class="node output">
+            <div class="node-name">app.py</div>
+            <div class="node-file">dashboard/</div>
+            <div class="node-desc">Streamlit · 3D globe · alert table · burn log</div>
+          </div>
+          <div class="node output">
+            <div class="node-name">endpoint.py</div>
+            <div class="node-file">api/  :8000</div>
+            <div class="node-desc">FastAPI · POST /api/predict</div>
+          </div>
+          <div class="node output">
+            <div class="node-name">orbital.py</div>
+            <div class="node-file">simulator/</div>
+            <div class="node-desc">physics engine · writes JSON every 1s</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arch-arrow" style="padding-top:12px;">↓ <span class="arch-arrow-label">trained model artefacts</span></div>
+
+      <!-- STORAGE -->
+      <div class="layer">
+        <div class="layer-label">STORAGE</div>
+        <div class="layer-content">
+          <div class="node store">
+            <div class="node-name">regressor.pkl</div>
+            <div class="node-file">trained_models/lgbm/</div>
+            <div class="node-desc">~15 MB · R²=0.979</div>
+          </div>
+          <div class="node store">
+            <div class="node-name">classifier.pkl</div>
+            <div class="node-file">trained_models/lgbm/</div>
+            <div class="node-desc">~5 MB · AUC >0.97</div>
+          </div>
+          <div class="node store">
+            <div class="node-name">encoders.pkl</div>
+            <div class="node-file">trained_models/lgbm/</div>
+            <div class="node-desc">LabelEncoders for categorical cols</div>
+          </div>
+          <div class="node store">
+            <div class="node-name">maneuver_policy.zip</div>
+            <div class="node-file">trained_models/rl/</div>
+            <div class="node-desc">PPO RL agent · 400k steps</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /arch-diagram -->
+  </div><!-- /arch-wrap -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 2 — HOW TO RUN (STEP BY STEP)
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="section-title">02 · How To Run — Full Workflow</div>
+
+  <div class="workflow">
+
+    <!-- STEP 1 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(160,120,255,0.12);border:2px solid rgba(160,120,255,0.4);color:var(--purple);">1</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(160,120,255,0.3), rgba(0,212,255,0.3));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(160,120,255,0.1);color:var(--purple);">ONCE</div>
+          <div class="step-title">Setup — clone, install, configure</div>
+        </div>
+        <div class="step-desc">Run these once when setting up the project for the first time. After this you never need to repeat them.</div>
+        <div class="cmd-block" style="border-left-color:var(--purple);">
+          <div><span class="cmd">pip install</span> <span class="flag">-r</span> <span class="path">requirements.txt</span></div>
+          <div style="margin-top:8px;"><span class="comment"># 4. Set your Space-Track credentials</span></div>
+          <div><span class="cmd">cp</span> <span class="path">.env.example</span> <span class="path">.env</span></div>
+          <div><span class="comment"># then edit .env: SPACETRACK_USER=you@email.com  SPACETRACK_PASS=yourpass</span></div>
+        </div>
+        <div class="pills">
+          <div class="pill file">.env.example → .env</div>
+          <div class="pill file">requirements.txt</div>
+          <div class="pill time">~5 min</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(0,212,255,0.12);border:2px solid rgba(0,212,255,0.4);color:var(--cyan);">2</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(0,212,255,0.3), rgba(77,166,255,0.3));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(0,212,255,0.1);color:var(--cyan);">ONCE</div>
+          <div class="step-title">Train the LightGBM model</div>
+        </div>
+        <div class="step-desc">
+          Must be done before the controller or dashboard can make real predictions.
+          Without this the system falls back to a physics formula.
+          Place your CDM CSV at <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">data_files/satellite_conjunctions.csv</code> first.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--cyan);">
+          <div><span class="comment"># Option A — quick run, no tuning (~3 min on CPU)</span></div>
+          <div><span class="cmd">python</span> <span class="path">model/train.py</span></div>
+          <div style="margin-top:10px;"><span class="comment"># Option B — with Optuna hyperparameter tuning (RECOMMENDED, ~30 min)</span></div>
+          <div><span class="cmd">python</span> <span class="path">model/train.py</span> <span class="flag">--tune</span></div>
+          <div style="margin-top:10px;"><span class="comment"># Option C — full production run (tuning + 5-fold cross-validation)</span></div>
+          <div><span class="cmd">python</span> <span class="path">model/train.py</span> <span class="flag">--tune --cv</span></div>
+          <div style="margin-top:10px;"><span class="comment"># Batch inference on new data (after training)</span></div>
+          <div><span class="cmd">python</span> <span class="path">model/train.py</span> <span class="flag">--infer --input</span> <span class="path">new_events.csv</span></div>
+        </div>
+        <div class="pills">
+          <div class="pill file">model/train.py</div>
+          <div class="pill file">model/config.py</div>
+          <div class="pill file">data/data_pipeline.py</div>
+          <div class="pill out">→ trained_models/lgbm/regressor.pkl</div>
+          <div class="pill out">→ trained_models/lgbm/classifier.pkl</div>
+          <div class="pill out">→ trained_models/lgbm/encoders.pkl</div>
+          <div class="pill out">→ outputs/plots/*.png</div>
+          <div class="pill time">3 min / 30 min / 35 min</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(0,232,122,0.12);border:2px solid rgba(0,232,122,0.4);color:var(--green);">3</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(0,232,122,0.3), rgba(0,232,122,0.3));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(0,232,122,0.1);color:var(--green);">TERMINAL 1</div>
+          <div class="step-title">Start the orbital physics simulator</div>
+        </div>
+        <div class="step-desc">
+          The simulator runs at <strong style="color:var(--text);">100× real time</strong> — 1 real second = 100 simulated seconds.
+          It writes <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">data_files/satellite_model.json</code> every second.
+          The controller and dashboard read from this file. Keep this running the entire session.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--green);">
+          <div><span class="comment"># Keep running in Terminal 1 — do not close</span></div>
+          <div><span class="cmd">python</span> <span class="path">simulator/orbital.py</span></div>
+          <div style="margin-top:8px; color:#2a5040; font-style:italic;">
+            [Power House] Orbital simulator started · 100× real time<br>
+            [Power House] Orbit #1 | Alt=550.1km | Fuel=100% | Battery=94%<br>
+            [Power House] Ground contact: ISRO Bengaluru · Elevation=32°<br>
+            [Power House] Writing to: data_files/satellite_model.json
+          </div>
+        </div>
+        <div class="pills">
+          <div class="pill file">simulator/orbital.py</div>
+          <div class="pill out">→ data_files/satellite_model.json</div>
+          <div class="pill time">continuous · 1s update rate</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(255,216,77,0.12);border:2px solid rgba(255,216,77,0.4);color:var(--yellow);">4</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(255,216,77,0.3), rgba(255,140,42,0.3));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(255,216,77,0.1);color:var(--yellow);">TERMINAL 2</div>
+          <div class="step-title">Start the ACAS autonomous controller</div>
+        </div>
+        <div class="step-desc">
+          The controller runs a <strong style="color:var(--text);">60-second loop</strong>. Each cycle: reads satellite state → fetches TLEs → scans 24h of trajectories → runs LightGBM on every conjunction → decides action. TLE catalog refreshes every <strong style="color:var(--text);">90 minutes</strong>. All events are logged to <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">onboard_blackbox.log</code>.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--yellow);">
+          <div><span class="comment"># Keep running in Terminal 2 — do not close</span></div>
+          <div><span class="cmd">python</span> <span class="path">core/controller.py</span></div>
+          <div style="margin-top:8px; color:#3a3010; font-style:italic;">
+            ════════════════════════════════════════════════════════════<br>
+            ACAS — Autonomous Collision Avoidance System · Initialising<br>
+            ════════════════════════════════════════════════════════════<br>
+            Inference engine: LGBM_ACTIVE | Reg iter=4527 | threshold=0.650<br>
+            ✅ RL maneuver agent loaded: trained_models/rl/maneuver_policy.zip<br>
+            ✅ Catalog loaded: 200 objects<br>
+            ✅ ACAS fully initialised. Starting autonomous loop.
+          </div>
+        </div>
+        <div class="pills">
+          <div class="pill file">core/controller.py</div>
+          <div class="pill file">core/risk_scorer.py</div>
+          <div class="pill file">model/lgbm_engine.py</div>
+          <div class="pill file">data/tle_fetcher.py</div>
+          <div class="pill file">data/conjunction_finder.py</div>
+          <div class="pill out">→ onboard_blackbox.log</div>
+          <div class="pill time">60s cycle · 90min TLE refresh</div>
+          <div class="pill warn">requires .env credentials</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(77,166,255,0.12);border:2px solid rgba(77,166,255,0.4);color:var(--blue);">5</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(77,166,255,0.3), rgba(0,232,122,0.3));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(77,166,255,0.1);color:var(--blue);">TERMINAL 3</div>
+          <div class="step-title">Launch the Streamlit dashboard</div>
+        </div>
+        <div class="step-desc">
+          The dashboard opens at <strong style="color:var(--cyan);">http://localhost:8501</strong>. It reads live telemetry from <code style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">satellite_model.json</code>, renders a 3D globe with threat markers, and lets you inject manual scenarios using the 8 built-in SCENARIOS or custom sliders.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--blue);">
+          <div><span class="cmd">streamlit run</span> <span class="path">dashboard/app.py</span></div>
+          <div style="margin-top:8px; color:#1a2a40; font-style:italic;">
+            You can now view your Streamlit app in your browser.<br>
+            Local URL:  http://localhost:<span style="color:var(--blue);">8501</span><br>
+            Network URL: http://192.168.x.x:<span style="color:var(--blue);">8501</span>
+          </div>
+        </div>
+        <div class="pills">
+          <div class="pill file">dashboard/app.py</div>
+          <div class="pill file">dashboard/adapter.py</div>
+          <div class="pill out">→ http://localhost:8501</div>
+          <div class="pill time">instant start</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(0,212,255,0.12);border:2px solid rgba(0,212,255,0.4);color:var(--cyan);">6</div>
+        <div class="step-line" style="background:linear-gradient(to bottom, rgba(0,212,255,0.3), rgba(0,212,255,0.1));"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(0,212,255,0.1);color:var(--cyan);">OPTIONAL · TERMINAL 4</div>
+          <div class="step-title">Start the REST API server</div>
+        </div>
+        <div class="step-desc">
+          Run the FastAPI server if you need to integrate ACAS with external tools, ground station software, or other satellites. The dashboard does <em>not</em> require this — it calls the models directly.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--cyan);">
+          <div><span class="cmd">uvicorn</span> <span class="path">api.endpoint:app</span> <span class="flag">--reload --port</span> <span class="path">8000</span></div>
+          <div style="margin-top:8px;"><span class="comment"># Test endpoints</span></div>
+          <div><span class="cmd">curl</span> <span class="path">http://localhost:8000/api/health</span></div>
+          <div><span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="path">http://localhost:8000/api/predict</span> \</div>
+          <div style="padding-left:16px;"><span class="flag">-H</span> <span class="path">"Content-Type: application/json"</span> \</div>
+          <div style="padding-left:16px;"><span class="flag">-d</span> <span class="path">'{"satellite_tle":"...","object_tle":"...","object_type":"DEBRIS"}'</span></div>
+        </div>
+        <div class="pills">
+          <div class="pill file">api/endpoint.py</div>
+          <div class="pill file">pipeline/model_bridge.py</div>
+          <div class="pill file">pipeline/tle_processor.py</div>
+          <div class="pill out">→ http://localhost:8000</div>
+          <div class="pill out">→ GET /api/health</div>
+          <div class="pill out">→ POST /api/predict</div>
+          <div class="pill out">→ GET /api/thresholds</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 7 -->
+    <div class="step">
+      <div class="step-left">
+        <div class="step-num" style="background:rgba(0,232,122,0.12);border:2px solid rgba(0,232,122,0.4);color:var(--green);">7</div>
+        <div class="step-line" style="background:none;"></div>
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <div class="step-tag" style="background:rgba(0,232,122,0.1);color:var(--green);">ANYTIME</div>
+          <div class="step-title">Run tests</div>
+        </div>
+        <div class="step-desc">
+          Two test suites. Model accuracy requires the trained pkl files. Risk scorer unit tests need nothing — they run against the pure Python logic only.
+        </div>
+        <div class="cmd-block" style="border-left-color:var(--green);">
+          <div><span class="comment"># All tests</span></div>
+          <div><span class="cmd">pytest</span></div>
+          <div style="margin-top:8px;"><span class="comment"># Model accuracy — 6 metrics vs v1 ConjunctionNet baseline</span></div>
+          <div><span class="cmd">pytest</span> <span class="path">tests/test_model_accuracy.py</span> <span class="flag">-v</span></div>
+          <div style="margin-top:8px;"><span class="comment"># Risk scorer unit tests — no model needed</span></div>
+          <div><span class="cmd">pytest</span> <span class="path">tests/test_risk_scorer.py</span> <span class="flag">-v</span></div>
+          <div style="margin-top:8px; color:#1a4020; font-style:italic;">
+            tests/test_model_accuracy.py::test_alert_accuracy      PASSED  &gt;85%<br>
+            tests/test_model_accuracy.py::test_log_pearson_r        PASSED  &gt;0.90<br>
+            tests/test_model_accuracy.py::test_false_positive_burn  PASSED  &lt;10%<br>
+            tests/test_model_accuracy.py::test_edge_cases           PASSED  5/5
+          </div>
+        </div>
+        <div class="pills">
+          <div class="pill file">tests/test_model_accuracy.py</div>
+          <div class="pill file">tests/test_risk_scorer.py</div>
+          <div class="pill warn">accuracy tests need trained pkl files</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /workflow -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 3 — CONTROLLER LOOP LIVE OUTPUT
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="log-wrap">
+    <div class="section-title">03 · Controller Loop — What You See Per Cycle</div>
+    <div class="log-box">
+<span class="l-ts">2026-03-06 14:23:01 |</span> <span class="l-inf">INFO    |</span> <span class="l-dim">────────────────────────────────────────────────────────────</span>
+<span class="l-ts">2026-03-06 14:23:01 |</span> <span class="l-inf">INFO    |</span> <span class="l-msg">Loop #7 | 2026-03-06 14:23:01 UTC</span>
+<span class="l-ts">2026-03-06 14:23:01 |</span> <span class="l-inf">INFO    |</span> <span class="l-msg">📡 Satellite state | Fuel=<span class="l-val">74.3%</span> | Battery=<span class="l-val">88.1%</span> | Alt=<span class="l-val">550km</span> | Ground=<span class="l-grn">YES</span></span>
+<span class="l-ts">2026-03-06 14:23:02 |</span> <span class="l-inf">INFO    |</span> <span class="l-msg">🔄 TLE data is <span class="l-val">91 min</span> old — refreshing catalog…</span>
+<span class="l-ts">2026-03-06 14:23:05 |</span> <span class="l-inf">INFO    |</span> <span class="l-grn">✅ Refreshed 200 TLE records</span>
+<span class="l-ts">2026-03-06 14:23:05 |</span> <span class="l-inf">INFO    |</span> <span class="l-msg">Propagating catalog (24h window, 1-min steps)…</span>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-wrn">WARNING |</span> <span class="l-msg">⚠️  <span class="l-val">3</span> conjunction(s) detected within 5km</span>
+<br>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-inf">INFO    |</span>   <span class="l-grn">[GREEN ]</span>  <span class="l-msg">SENTINEL-2 DEB        | Miss=<span class="l-val">3.800km</span> | TCA=<span class="l-val">28.00h</span> | Pc(raw)=<span class="l-val">1.2e-07</span> | Pc(adj)=<span class="l-val">1.2e-07</span></span>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-inf">INFO    |</span>   <span class="l-yel">[YELLOW]</span>  <span class="l-msg">COSMOS 2360 DEB       | Miss=<span class="l-val">1.200km</span> | TCA=<span class="l-val">5.00h</span>  | Pc(raw)=<span class="l-val">3.4e-05</span> | Pc(adj)=<span class="l-val">3.4e-05</span></span>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-inf">INFO    |</span>   <span class="l-red">[RED   ]</span>  <span class="l-msg">COSMOS 954 DEB        | Miss=<span class="l-val">0.150km</span> | TCA=<span class="l-val">1.20h</span>  | Pc(raw)=<span class="l-val">4.7e-03</span> | Pc(adj)=<span class="l-val">4.7e-03</span></span>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-wrn">WARNING |</span> <span class="l-red">🔴 RED ALERT: 10440 | Pc=4.7e-03 | TCA=1.20h | ΔV=2.31 m/s</span>
+<span class="l-ts">2026-03-06 14:23:12 |</span> <span class="l-wrn">WARNING |</span>   <span class="l-msg">Ground contact active. Executing with ground confirmation.</span>
+<span class="l-ts">2026-03-06 14:23:13 |</span> <span class="l-inf">INFO    |</span>   <span class="l-msg">📤 DOWNLINK REQUEST | Object=<span class="l-val">10440</span> | ΔV=<span class="l-val">2.31 m/s</span> | Fuel cost=<span class="l-val">0.14%</span></span>
+<span class="l-ts">2026-03-06 14:23:13 |</span> <span class="l-grn">INFO    |</span> <span class="l-grn">✅ Burn verified. Trajectory updated.</span>
+<span class="l-ts">2026-03-06 14:23:13 |</span> <span class="l-inf">INFO    |</span> <span class="l-msg">Loop completed in <span class="l-val">12.4s</span></span>
+<span class="l-ts">2026-03-06 14:23:13 |</span> <span class="l-inf">INFO    |</span> <span class="l-dim">⏳ Next cycle in 47s</span>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 4 — ALERT DECISION TREE
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="decision-wrap">
+    <div class="section-title">04 · Alert Decision Tree</div>
+
+    <div class="decision-grid">
+
+      <div class="alert-col col-green">
+        <div class="alert-header">🟢 GREEN</div>
+        <div class="alert-body">
+          <div class="alert-row"><strong>THRESHOLD</strong><span class="val">Pc &lt; 1×10⁻⁵</span></div>
+          <div class="alert-row"><strong>MISS DISTANCE</strong><span class="val">typically &gt;5 km</span></div>
+          <div class="alert-row"><strong>ACTION</strong><span class="val">No action. Log and continue.</span></div>
+          <div class="alert-row"><strong>CONTROLLER</strong><span class="val">return, sleep until next cycle</span></div>
+          <div class="alert-row"><strong>DASHBOARD</strong><span class="val">green dot on globe</span></div>
+        </div>
+      </div>
+
+      <div class="alert-col col-yellow">
+        <div class="alert-header">🟡 YELLOW</div>
+        <div class="alert-body">
+          <div class="alert-row"><strong>THRESHOLD</strong><span class="val">1×10⁻⁵ ≤ Pc &lt; 1×10⁻⁴</span></div>
+          <div class="alert-row"><strong>MISS DISTANCE</strong><span class="val">~1.5 – 5 km</span></div>
+          <div class="alert-row"><strong>ACTION</strong><span class="val">Monitor. Alert downlinked to ground.</span></div>
+          <div class="alert-row"><strong>CONTROLLER</strong><span class="val">log alert, notify ground station</span></div>
+          <div class="alert-row"><strong>DASHBOARD</strong><span class="val">yellow badge · increased refresh rate</span></div>
+        </div>
+      </div>
+
+      <div class="alert-col col-orange">
+        <div class="alert-header">🟠 ORANGE</div>
+        <div class="alert-body">
+          <div class="alert-row"><strong>THRESHOLD</strong><span class="val">1×10⁻⁴ ≤ Pc &lt; 1×10⁻³</span></div>
+          <div class="alert-row"><strong>MISS DISTANCE</strong><span class="val">~0.3 – 1.5 km</span></div>
+          <div class="alert-row"><strong>WITH GROUND</strong><span class="val">downlink manoeuvre request, await confirmation</span></div>
+          <div class="alert-row"><strong>NO GROUND + TCA &lt;2h</strong><span class="val">AUTONOMOUS BURN</span></div>
+          <div class="alert-row"><strong>NO GROUND + TCA &gt;2h</strong><span class="val">queue burn, wait for contact</span></div>
+        </div>
+      </div>
+
+      <div class="alert-col col-red">
+        <div class="alert-header">🔴 RED</div>
+        <div class="alert-body">
+          <div class="alert-row"><strong>THRESHOLD</strong><span class="val">Pc ≥ 1×10⁻³</span></div>
+          <div class="alert-row"><strong>MISS DISTANCE</strong><span class="val">&lt;0.3 km (300 m)</span></div>
+          <div class="alert-row"><strong>WITH GROUND</strong><span class="val">execute burn with ground confirmation</span></div>
+          <div class="alert-row"><strong>NO GROUND</strong><span class="val">AUTONOMOUS EXECUTION · logged to black box</span></div>
+          <div class="alert-row"><strong>ΔV SOURCE</strong><span class="val">PPO RL agent → geometric fallback</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:16px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--dim);">
+      <span style="color:var(--orange);">⚡ Fuel scaling:</span>
+      fuel &gt;50% → standard thresholds ·
+      fuel &gt;30% → thresholds ×3 ·
+      fuel &gt;15% → thresholds ×8 ·
+      fuel &lt;15% → thresholds ×50 (emergency only) &nbsp;|&nbsp;
+      <span style="color:var(--orange);">⚡ TLE stale (&gt;48h)</span> → Pc inflated up to 5× &nbsp;|&nbsp;
+      <span style="color:var(--orange);">⚡ Battery &lt;20%</span> → Pc sensitivity ×1.5
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 5 — BUILT-IN TEST SCENARIOS
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="section-title">05 · Built-in Dashboard Scenarios</div>
+  <div class="scenario-grid" style="margin-bottom:64px;">
+
+    <div class="sc-card YELLOW">
+      <div class="sc-alert">🟡 YELLOW</div>
+      <div class="sc-name">SENTINEL-2 DEB</div>
+      <div class="sc-norad">NORAD #48891</div>
+      <div class="sc-desc">Slow fragment — large miss, 28h out</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>3.8 km</span></div>
+        <div class="sc-stat">TCA <span>28.0h</span></div>
+        <div class="sc-stat">TLE age <span>6h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card YELLOW">
+      <div class="sc-alert">🟡 YELLOW</div>
+      <div class="sc-name">SL-8 R/B</div>
+      <div class="sc-norad">NORAD #12456</div>
+      <div class="sc-desc">Rocket body — moderate miss, plenty of time</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>2.5 km</span></div>
+        <div class="sc-stat">TCA <span>18.0h</span></div>
+        <div class="sc-stat">TLE age <span>10h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card ORANGE">
+      <div class="sc-alert">🟠 ORANGE</div>
+      <div class="sc-name">COSMOS 2360 DEB</div>
+      <div class="sc-norad">NORAD #33401</div>
+      <div class="sc-desc">5h to TCA — manoeuvre prep required</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>1.2 km</span></div>
+        <div class="sc-stat">TCA <span>5.0h</span></div>
+        <div class="sc-stat">TLE age <span>14h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card ORANGE">
+      <div class="sc-alert">🟠 ORANGE</div>
+      <div class="sc-name">IRIDIUM 33 DEB</div>
+      <div class="sc-norad">NORAD #33738</div>
+      <div class="sc-desc">High speed, 3.5h TCA — RL computes optimal ΔV</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>0.8 km</span></div>
+        <div class="sc-stat">TCA <span>3.5h</span></div>
+        <div class="sc-stat">TLE age <span>20h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card ORANGE">
+      <div class="sc-alert">🟠 ORANGE · QUEUED</div>
+      <div class="sc-name">FENGYUN 1C DEB</div>
+      <div class="sc-norad">NORAD #28682</div>
+      <div class="sc-desc">No ground contact + TCA &gt;2h → burn queued</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>0.6 km</span></div>
+        <div class="sc-stat">TCA <span>2.5h</span></div>
+        <div class="sc-stat">TLE age <span>8h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card RED">
+      <div class="sc-alert">🔴 RED · IMMEDIATE BURN</div>
+      <div class="sc-name">COSMOS 954 DEB</div>
+      <div class="sc-norad">NORAD #10440</div>
+      <div class="sc-desc">Critical Pc, 1.2h TCA — immediate burn executed</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>150 m</span></div>
+        <div class="sc-stat">TCA <span>1.2h</span></div>
+        <div class="sc-stat">TLE age <span>4h</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card RED">
+      <div class="sc-alert">🔴 RED · AUTONOMOUS</div>
+      <div class="sc-name">USA-193 DEB</div>
+      <div class="sc-norad">NORAD #29651</div>
+      <div class="sc-desc">Stale TLE 72h → Pc×4, 0.5h TCA, no contact</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>250 m</span></div>
+        <div class="sc-stat">TCA <span>0.5h</span></div>
+        <div class="sc-stat">TLE age <span>72h ⚠️</span></div>
+      </div>
+    </div>
+
+    <div class="sc-card RED">
+      <div class="sc-alert">🔴 RED · HEAD-ON</div>
+      <div class="sc-name">NOAA-16 DEB</div>
+      <div class="sc-norad">NORAD #26536</div>
+      <div class="sc-desc">Head-on approach, 1.8h TCA — extreme closing speed</div>
+      <div class="sc-stats">
+        <div class="sc-stat">miss <span>300 m</span></div>
+        <div class="sc-stat">TCA <span>1.8h</span></div>
+        <div class="sc-stat">TLE age <span>5h</span></div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SECTION 6 — ALL FILES MAP
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="file-table-wrap">
+    <div class="section-title">06 · Every File — What To Do With It</div>
+
+    <div class="file-grid">
+      <div class="file-row header-row">
+        <div class="fc">File in ACAS/</div>
+        <div class="fc">Action</div>
+        <div class="fc fdesc">What it does · source</div>
+      </div>
+
+      <!-- CORE -->
+      <div class="file-row"><div class="fc fname">core/controller.py</div><div class="fc"><span class="badge-action ba-rework">rework</span></div><div class="fc fdesc">60s autonomous loop. From onboard/acas_controller_lgbm.py — remove sys.path hacks, fix 4 import lines, fix satellite_model path</div></div>
+      <div class="file-row"><div class="fc fname">core/risk_scorer.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">Alert logic + 6 limits + manoeuvre plan. From models/risk_scorer.py — zero changes needed</div></div>
+      <div class="file-row"><div class="fc fname">core/maneuver_planner.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">PPO RL agent + ManeuverEnv. From models/maneuver_planner.py — zero changes needed</div></div>
+
+      <!-- DATA -->
+      <div class="file-row"><div class="fc fname">data/tle_fetcher.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">Space-Track API + SGP4 propagator. From data/tle_fetcher.py — zero changes needed</div></div>
+      <div class="file-row"><div class="fc fname">data/conjunction_finder.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">TCA finder, 5km screener. From data/conjunction_finder.py — zero changes needed</div></div>
+      <div class="file-row"><div class="fc fname">data/data_pipeline.py</div><div class="fc"><span class="badge-action ba-change">1 line</span></div><div class="fc fdesc">35+ feature engineering, imputation, splits. From satellite_lgbm/data_pipeline.py — change: import config → from model import config</div></div>
+
+      <!-- MODEL -->
+      <div class="file-row"><div class="fc fname">model/config.py</div><div class="fc"><span class="badge-action ba-change">2 lines</span></div><div class="fc fdesc">All constants — paths, params, thresholds. From satellite_lgbm/config.py — add BASE_DIR, fix MODEL_DIR to trained_models/lgbm/</div></div>
+      <div class="file-row"><div class="fc fname">model/lgbm_model.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">SatelliteRiskRegressor + SatelliteRiskClassifier + Optuna. From satellite_lgbm/model.py — zero changes (rename only)</div></div>
+      <div class="file-row"><div class="fc fname">model/lgbm_engine.py</div><div class="fc"><span class="badge-action ba-rework">rework</span></div><div class="fc fdesc">Inference bridge, 103 CDM features. From lgbm_inference_engine.py — remove sys.path hacks, replace with clean imports</div></div>
+      <div class="file-row"><div class="fc fname">model/inference.py</div><div class="fc"><span class="badge-action ba-change">3 lines</span></div><div class="fc fdesc">Batch + single-event prediction. From satellite_lgbm/inference.py — fix 3 import lines for new paths</div></div>
+      <div class="file-row"><div class="fc fname">model/train.py</div><div class="fc"><span class="badge-action ba-change">4 lines</span></div><div class="fc fdesc">Master training orchestrator. From satellite_lgbm/main.py — fix 4 import lines, rename file</div></div>
+      <div class="file-row"><div class="fc fname">model/evaluate.py</div><div class="fc"><span class="badge-action ba-change">1 line</span></div><div class="fc fdesc">SHAP, metrics, all plots. From satellite_lgbm/evaluate.py — change: import config → from model import config</div></div>
+
+      <!-- PIPELINE -->
+      <div class="file-row"><div class="fc fname">pipeline/tle_processor.py</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">Raw TLE string → 103 CDM feature dict. From satellite_lgbm/tle_processor.py — zero changes needed</div></div>
+      <div class="file-row"><div class="fc fname">pipeline/model_bridge.py</div><div class="fc"><span class="badge-action ba-rework">rework</span></div><div class="fc fdesc">TLE pair → full prediction dict. From satellite_lgbm/model_bridge.py — remove sys.path hacks, fix imports + model_dir path</div></div>
+
+      <!-- SIMULATOR -->
+      <div class="file-row"><div class="fc fname">simulator/orbital.py</div><div class="fc"><span class="badge-action ba-change">1 line</span></div><div class="fc fdesc">Physics engine, writes JSON every 1s. From satellite_process.py — fix MODEL_FILE path to data_files/</div></div>
+
+      <!-- DASHBOARD -->
+      <div class="file-row"><div class="fc fname">dashboard/app.py</div><div class="fc"><span class="badge-action ba-change">3 lines</span></div><div class="fc fdesc">Streamlit UI, 3D globe, 8 scenarios. From dashboard/app.py (patched) — fix MODEL_FILE path + 2 import lines</div></div>
+      <div class="file-row"><div class="fc fname">dashboard/adapter.py</div><div class="fc"><span class="badge-action ba-change">2 lines</span></div><div class="fc fdesc">Form data → LightGBM → Assessment. From dashboard_lgbm_adapter.py — fix 2 import lines</div></div>
+
+      <!-- API -->
+      <div class="file-row"><div class="fc fname">api/endpoint.py</div><div class="fc"><span class="badge-action ba-change">1 line</span></div><div class="fc fdesc">FastAPI REST server. From satellite_lgbm/api_endpoint.py — fix 1 import line</div></div>
+
+      <!-- TESTS -->
+      <div class="file-row"><div class="fc fname">tests/test_model_accuracy.py</div><div class="fc"><span class="badge-action ba-change">2 lines</span></div><div class="fc fdesc">6-metric accuracy evaluation. From evaluate_models_lgbm.py — fix 2 import lines</div></div>
+      <div class="file-row"><div class="fc fname">tests/test_risk_scorer.py</div><div class="fc"><span class="badge-action ba-new">create</span></div><div class="fc fdesc">Unit tests for all 6 limitations + alert thresholds. New file — write tests per docstring spec</div></div>
+
+      <!-- BINARY -->
+      <div class="file-row"><div class="fc fname">trained_models/rl/maneuver_policy.zip</div><div class="fc"><span class="badge-action ba-copy">copy</span></div><div class="fc fdesc">PPO RL agent. From satellite-acas/trained_models/maneuver_policy.zip — copy binary as-is</div></div>
+      <div class="file-row"><div class="fc fname">trained_models/lgbm/regressor.pkl</div><div class="fc"><span class="badge-action ba-train">train</span></div><div class="fc fdesc">LightGBM regressor. Generated by: python model/train.py</div></div>
+      <div class="file-row"><div class="fc fname">trained_models/lgbm/classifier.pkl</div><div class="fc"><span class="badge-action ba-train">train</span></div><div class="fc fdesc">LightGBM classifier. Generated by: python model/train.py</div></div>
+      <div class="file-row"><div class="fc fname">trained_models/lgbm/encoders.pkl</div><div class="fc"><span class="badge-action ba-train">train</span></div><div class="fc fdesc">LabelEncoders. Generated by: python model/train.py</div></div>
+
+      <!-- DELETE -->
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">models/conjunction_net.py</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">Broken neural net — 16.2% accuracy. Do not copy.</div></div>
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">trained_models/conjunction_model.onnx*</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">Broken ONNX weights (.onnx .onnx.data .pt). Do not copy.</div></div>
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">onboard/acas_controller.py</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">Original broken controller. Use acas_controller_lgbm.py instead.</div></div>
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">evaluate_models.py</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">Evaluates the broken ONNX model. Replaced by tests/test_model_accuracy.py</div></div>
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">patch_dashboard.py</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">One-time migration script. Already applied. Do not copy.</div></div>
+      <div class="file-row"><div class="fc fname" style="color:var(--red);opacity:0.6;text-decoration:line-through;">dashboard/app.py.bak</div><div class="fc"><span class="badge-action ba-delete">delete</span></div><div class="fc fdesc">Backup from patch. Not for version control.</div></div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="text-align:center;padding:24px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);letter-spacing:1px;">
+    ACAS v2.0 · Power House · IN-SPACe · SSO 550km · LightGBM R²=0.979 · Alert accuracy &gt;90%
+  </div>
+
+</div>
+</body>
+</html>

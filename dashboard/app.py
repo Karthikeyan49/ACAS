@@ -1,24 +1,46 @@
-# ============================================================
-# dashboard/app.py  — ACAS POWER HOUSE  v4  (complete rewrite)
-#
-# LAYOUT
-# ┌─────────────────────┬─────────────────────────────────────────────────────┐
-# │   LEFT SIDEBAR      │  MAIN AREA                                          │
-# │  ─────────────────  │  [Mode badge] [10 metric cards] [Threat count]      │
-# │  Model status       │  ┌──────────────────────┬──────────────────────┐   │
-# │  ─────────────────  │  │  Three.js 3D Globe   │  Burn model output   │   │
-# │  §1 ECI pos / vel   │  │  · Earth (stable)    │  Threat scenarios    │   │
-# │     (fragment 3s)   │  │  · Satellite (60fps) │  ACAS log            │   │
-# │  ─────────────────  │  │  · Debris markers    │                      │   │
-# │  §2 Custom threat   │  │  · Burn exhaust      │                      │   │
-# │     form (sliders)  │  └──────────────────────┴──────────────────────┘   │
-# └─────────────────────┴─────────────────────────────────────────────────────┘
-#
-# HOW TO RUN
-#   Terminal 1:  python satellite_process.py
-#   Terminal 2:  streamlit run dashboard/app.py
-# ============================================================
+"""
+dashboard/app.py
+══════════════════════════════════════════════════════════════════════════════
+WHAT THIS FILE IS
+    Streamlit web dashboard. Renders the 3D globe, live telemetry, threat
+    table, ACAS pipeline log, and burn visualisation. Allows manual threat
+    injection via sliders or built-in SCENARIOS.
 
+CALLED FROM
+    Terminal:  streamlit run dashboard/app.py
+    pyproject.toml entry point: "acas-dashboard"
+
+CALLS INTO
+    model/lgbm_engine.py     LGBMInferenceEngine (loaded once, cached)
+    core/risk_scorer.py      RiskScorer, SatState, Alert
+    stable_baselines3        PPO.load() for RL manoeuvre agent
+    data_files/satellite_model.json  live telemetry, read on every refresh
+
+WHAT IT RENDERS
+    Left panel
+        Satellite telemetry card   fuel, battery, altitude, ground contact
+        Conjunction table          miss_km, TCA, Pc, alert badge
+        ACAS pipeline log          step-by-step trace of last prediction
+    Right panel
+        3D globe (Three.js via st.components)
+        Burn output card           alert, Pc, ΔV, fuel cost, decision text
+    Sidebar
+        Model status banner        LightGBM active / physics fallback
+        8 built-in SCENARIOS
+        Custom threat form         sliders for miss_km, tca_h, rel_pos, rel_vel
+
+PREDICTION FLOW (each threat injection)
+    load_models()                     @st.cache_resource, runs once
+    predict_pc(conj)                  LGBMInferenceEngine.predict_pc_from_conjunction
+    RiskScorer.assess()               → Assessment
+    predict_burn()                    PPO RL agent or geometric fallback
+    render alert card + pipeline log
+
+IMPORT CHANGES FROM ORIGINAL (post-patch dashboard/app.py)
+    from lgbm_inference_engine import  →  from model.lgbm_engine import
+    from models.risk_scorer    import  →  from core.risk_scorer  import
+══════════════════════════════════════════════════════════════════════════════
+"""
 import sys, os, json, time, math
 import numpy as np
 import streamlit as st
@@ -29,10 +51,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 # ── LightGBM integration (replaces ConjunctionNet ONNX) ──────────────────
-from lgbm_inference_engine  import LGBMInferenceEngine
-from models.risk_scorer     import RiskScorer, SatState, Alert
+from model.lgbm_engine  import LGBMInferenceEngine
+from core.risk_scorer   import RiskScorer, SatState, Alert
 
-MODEL_FILE = os.path.join(ROOT, "satellite_model.json")
+MODEL_FILE = os.path.join(ROOT, "data_files", "satellite_model.json")
 ONNX_PATH  = os.path.join(ROOT, "trained_models", "conjunction_model.onnx")
 RL_PATH    = os.path.join(ROOT, "trained_models", "maneuver_policy")
 
