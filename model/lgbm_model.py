@@ -63,7 +63,7 @@ from sklearn.metrics import (
     average_precision_score,
 )
 
-import config
+from model import config
 
 logger = logging.getLogger(__name__)
 optuna.logging.set_verbosity(optuna.logging.WARNING)

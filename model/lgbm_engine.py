@@ -330,7 +330,6 @@ class LGBMInferenceEngine:
             return
 
         try:
-           
             self._impute         = impute_missing
             self._clip           = clip_outliers
             self._engineer       = engineer_features
