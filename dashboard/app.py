@@ -28,7 +28,8 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from models.conjunction_net import extract_features
+# ── LightGBM integration (replaces ConjunctionNet ONNX) ──────────────────
+from lgbm_inference_engine  import LGBMInferenceEngine
 from models.risk_scorer     import RiskScorer, SatState, Alert
 
 MODEL_FILE = os.path.join(ROOT, "satellite_model.json")
@@ -164,13 +165,17 @@ AC = {"GREEN":"#00ff88","YELLOW":"#ffd700","ORANGE":"#ff8c00","RED":"#ff2244"}
 @st.cache_resource
 def load_models():
     r = {}
+    # ── LightGBM model (replaces ONNX ConjunctionNet) ──────────────────────
     try:
-        import onnxruntime as ort
-        r['onnx'] = ort.InferenceSession(ONNX_PATH, providers=['CPUExecutionProvider'])
-        r['onnx_ok'] = True;  r['onnx_msg'] = "✅ conjunction_model.onnx loaded"
+        lgbm_engine = LGBMInferenceEngine()
+        r['lgbm']    = lgbm_engine
+        r['onnx_ok'] = lgbm_engine.is_loaded
+        r['onnx_msg'] = f"✅ LightGBM loaded" if lgbm_engine.is_loaded else "⚠️ LightGBM — physics fallback"
     except Exception as e:
-        r['onnx'] = None; r['onnx_ok'] = False
-        r['onnx_msg'] = f"⚠️ ONNX missing — physics fallback"
+        r['lgbm']    = LGBMInferenceEngine()   # will use physics fallback
+        r['onnx_ok'] = False
+        r['onnx_msg'] = f"⚠️ LightGBM init error: {e}"
+    # ── RL maneuver agent (unchanged) ─────────────────────────────────────
     try:
         from stable_baselines3 import PPO
         r['rl'] = PPO.load(RL_PATH); r['rl_ok'] = True
@@ -207,15 +212,21 @@ def add_log(msg, css="li"):
 # PIPELINE
 # ============================================================
 def predict_pc(conj):
-    feats = extract_features(conj)
-    if M['onnx_ok']:
-        inp = feats.reshape(1,-1).astype(np.float32)
-        out = M['onnx'].run(None, {'features': inp})
-        pc  = float(out[0][0][0]);  mth = "ONNX"
-    else:
-        miss = float(feats[6]); spd = float(feats[8])
-        pc   = min((0.01/(miss+1e-10))**2 * spd/7.8, 1.0)
-        mth  = "PHYSICS"
+    # ── LightGBM prediction (103 CDM features) ───────────────────────────
+    lgbm   = M['lgbm']
+    pc     = lgbm.predict_pc_from_conjunction(conj)
+    mth    = "LightGBM" if lgbm.is_loaded else "PHYSICS-FALLBACK"
+    # Keep feats for pipeline log display (12-element approximation)
+    import numpy as _np
+    miss   = conj.get('miss_km', 1.0)
+    spd    = float(_np.linalg.norm(conj.get('rel_vel', [7.8,0,0])))
+    danger = miss / (spd + 1e-10)
+    feats  = _np.array([
+        *conj.get('rel_pos',[0,0,0]),
+        *conj.get('rel_vel',[0,0,0]),
+        miss, conj.get('tca_hours',1.0), spd,
+        0.0, float(conj.get('tle_stale',0)), danger
+    ], dtype=_np.float32)
     return pc, feats, mth
 
 def predict_burn(conj, sat):
