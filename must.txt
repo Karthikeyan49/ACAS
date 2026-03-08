@@ -1,0 +1,5 @@
+Must have — Raspberry Pi benchmark showing inference runs in < 100ms on constrained hardware. This is your in-orbit credibility proof. One evening of work.
+Must have — Closed-loop HIL demo: orbital simulator → controller → burn → trajectory update. Your code already does 80% of this.
+Must have — ISRO CDM adapter stub, even if untested against real data. Shows you understand ISRO's data pipeline.
+Should have — ONNX export of the regressor. Demonstrates the indigenisation path.
+Nice to have — A short video of the dashboard showing a RED alert → autonomous burn → miss distance improvement on the next cycle.

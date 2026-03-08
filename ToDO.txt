@@ -1,0 +1,26 @@
+Must have — ISRO CDM adapter stub, even if untested against real data. Shows you understand ISRO's data pipeline.
+
+
+
+why:
+
+1. How do you know this burn direction actually reduces collision probability?
+Because:
+orbital mechanics is continuous physics
+synthetic datasets may not reflect real orbital dynamics
+
+In real missions, maneuvers are determined using orbital propagation simulations, not static datasets.
+
+______________________________________
+
+1. onnx+C
+2. C port risk,controller
+3. orbital hardware in loop simulation (close the loop excute_burn)
+4. The HIL loop is currently open — execute_burn() doesn't write back to satellite_model.json, and satellite_process.py doesn't read burns
+
+______________________________________
+
+once onnx is done it can run in arm due c library avilability onnxruntime
+This C file is what would actually run on the satellite OBC. Your Python model and Python training pipeline stay exactly as they are — you just add this one export step and the C inference file.
+
+**For the IN-SPACe application**, you do not need to write this C file now. You just need to say: "Our indigenisation roadmap includes exporting to ONNX and replacing the LightGBM Python runtime with the open-standard ONNX C runtime, removing all foreign library dependencies from the flight software."
