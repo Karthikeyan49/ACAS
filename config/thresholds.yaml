@@ -1,9 +1,11 @@
 # ACAS Operational Thresholds — edit here, not in source code.
+# Loaded by core/config_loader.py; consumed by risk_scorer, decision_fsm,
+# pc_analytic and the REST API.
 
+# Lower-bound adjusted-Pc for each alert level (below yellow ⇒ GREEN).
 alerts:
-  green:  1.0e-5
-  yellow: 1.0e-4
-  orange: 1.0e-3
+  yellow: 1.0e-5
+  orange: 1.0e-4
   red:    1.0e-3
 
 fuel_threshold_scale:
@@ -28,3 +30,12 @@ lgbm:
   risk_score_manoeuvre:  -5.0
   risk_score_monitoring: -6.0
   risk_score_watch:      -8.0
+
+# Analytic (Foster 2D) collision probability — combined hard-body radius.
+hard_body_radius_m: 20.0
+
+# Decision gate — autonomy governance before a burn is executed.
+decision_gate:
+  veto_window_s:         300     # ground may veto within this window
+  autonomous_if_no_link: true    # skip veto wait when no ground contact
+  max_autonomous_dv_ms:  2.0     # burns above this always need ground ack
