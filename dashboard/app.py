@@ -56,6 +56,11 @@ from core.risk_scorer   import RiskScorer, SatState, Alert
 
 MODEL_FILE = os.path.join(ROOT, "data_files", "satellite_model.json")
 ONNX_PATH  = os.path.join(ROOT, "trained_models", "conjunction_model.onnx")
+
+# Bundled locally so the globe renders with no outbound network call
+# (ground segment networks are often firewalled/air-gapped).
+with open(os.path.join(ROOT, "dashboard", "static", "three.min.js")) as _f:
+    THREE_JS_SRC = _f.read()
 RL_PATH    = os.path.join(ROOT, "trained_models", "rl", "maneuver_policy")
 
 # ============================================================
@@ -460,7 +465,7 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '<canvas id="c"></canvas>\n'
         '<div id="hud">Drag · Scroll zoom · real ECI seed</div>\n'
         '<div id="badge"></div>\n'
-        '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n'
+        f'<script>{THREE_JS_SRC}</script>\n'
         '<script>\n'
         # ── Python-injected values ──
         f'const SAT_A={a_km};\n'
