@@ -11,7 +11,11 @@ CALLED FROM
     dashboard/adapter.py  scorer.assess(conj, raw_pc, sat_state)
 
 CALLS INTO
-    numpy only. No imports from this project.
+    numpy
+    core.config_loader   — alert bands + fuel-scale multipliers (stdlib-safe;
+                           the ONLY project import, per the flight-software
+                           numpy+stdlib constraint on core/). Falls back to the
+                           built-in defaults below if the YAML is missing.
 
 WHAT IT PROVIDES
     Alert         Enum: GREEN | YELLOW | ORANGE | RED
@@ -56,6 +60,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List
 from enum import Enum
+
+from core import config_loader
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -106,13 +112,45 @@ class Assessment:
 # ─────────────────────────────────────────────────────────────────────────────
 class RiskScorer:
 
-    # Standard Pc thresholds (when fuel is healthy)
-    # Based on NASA CARA operational guidelines
+    # Standard Pc thresholds (when fuel is healthy).
+    # Based on NASA CARA operational guidelines. These are the FALLBACK defaults
+    # used when config/thresholds.yaml is unavailable; the live values are read
+    # from config_loader in __init__ (and are identical to these in the shipped
+    # YAML). Kept as a class attribute for backward compatibility.
     BASE_THRESHOLDS = {
         'yellow': 1e-5,
         'orange': 1e-4,
         'red':    1e-3
     }
+
+    # Fallback fuel-scale multipliers (config: fuel_threshold_scale.*).
+    FUEL_SCALE_DEFAULT = {
+        'above_50': 1.0,
+        'above_30': 3.0,
+        'above_15': 8.0,
+        'below_15': 50.0,
+    }
+
+    def __init__(self):
+        """Load alert bands and fuel-scale multipliers from config/thresholds.yaml
+        via core.config_loader, falling back to the class-level defaults if the
+        YAML (or any key) is missing. Read per-instance so a hot config reload
+        is picked up by constructing a new RiskScorer."""
+        alerts = config_loader.get("alerts") or {}
+        self.base_thresholds = {
+            'yellow': float(alerts.get('yellow', self.BASE_THRESHOLDS['yellow'])),
+            'orange': float(alerts.get('orange', self.BASE_THRESHOLDS['orange'])),
+            'red':    float(alerts.get('red',    self.BASE_THRESHOLDS['red'])),
+        }
+
+        fs = config_loader.get("fuel_threshold_scale") or {}
+        d = self.FUEL_SCALE_DEFAULT
+        self.fuel_scale = {
+            'above_50': float(fs.get('fuel_above_50pct', d['above_50'])),
+            'above_30': float(fs.get('fuel_above_30pct', d['above_30'])),
+            'above_15': float(fs.get('fuel_above_15pct', d['above_15'])),
+            'below_15': float(fs.get('fuel_below_15pct', d['below_15'])),
+        }
 
     def assess(self,
                conjunction:    dict,
@@ -236,14 +274,22 @@ class RiskScorer:
     # A satellite with 5% fuel left cannot afford to spend it on marginal risks.
     # ─────────────────────────────────────────────────────────────────────────
     def _fuel_thresholds(self, fuel_pct: float) -> dict:
+        base = self.base_thresholds
+        red  = base['red']
+        # The RED (burn) threshold scales by the config fuel multiplier. The
+        # low-fuel YELLOW/ORANGE bands are hand-tuned operational overrides
+        # (not a clean multiple of the base band) and are kept as literals.
         if fuel_pct > 50:
-            return self.BASE_THRESHOLDS                              # standard
+            return dict(base)                                            # standard (1x)
         elif fuel_pct > 30:
-            return {'yellow': 1e-5, 'orange': 3e-4, 'red': 3e-3}   # 3x raised
+            return {'yellow': 1e-5, 'orange': 3e-4,
+                    'red': red * self.fuel_scale['above_30']}           # 3x raised
         elif fuel_pct > 15:
-            return {'yellow': 5e-5, 'orange': 1e-3, 'red': 8e-3}   # 8x raised
+            return {'yellow': 5e-5, 'orange': 1e-3,
+                    'red': red * self.fuel_scale['above_15']}           # 8x raised
         else:
-            return {'yellow': 1e-4, 'orange': 5e-3, 'red': 5e-2}   # 50x raised
+            return {'yellow': 1e-4, 'orange': 5e-3,
+                    'red': red * self.fuel_scale['below_15']}           # 50x raised
 
     def _classify(self, pc: float, thresholds: dict) -> Alert:
         if   pc >= thresholds['red']:    return Alert.RED

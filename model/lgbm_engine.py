@@ -37,6 +37,17 @@ WHAT IT PROVIDES
         is_loaded → bool
         status() → str  "LGBM_ACTIVE | Reg iter=4527 | threshold=0.650"
 
+ANALYTIC ARBITER (core/pc_analytic.py)
+    predict_pc_from_conjunction fuses THREE independent Pc estimates and takes
+    the conservative maximum, so a single model failure can never drive the
+    system to under-call a collision:
+        model_pc     — LightGBM inference on the 103 CDM features
+        analytic_pc  — Foster 2D short-encounter Pc from geometry + covariance
+        physics_pc   — coarse (0.01/miss)² safety floor (absolute lower bound)
+    pc_arbiter(model_pc, analytic_pc) picks max(model_pc, analytic_pc); the
+    physics floor is then applied as a final guard. A trained isotonic
+    calibrator (model/calibration.py) is applied last when present.
+
 PHYSICS FALLBACK (when pkl files not found)
     raw_pc = min((0.01 / miss_km)² × speed/7.8, 1.0)
     Doubled if tle_stale is True.
@@ -66,6 +77,8 @@ from model import config
 from data.data_pipeline import (impute_missing, clip_outliers,
                                   engineer_features, encode_categoricals)
 from model.lgbm_model import SatelliteRiskRegressor, SatelliteRiskClassifier
+from core.pc_analytic import compute_pc_foster, pc_arbiter, default_hard_body_radius
+from model import calibration
 
 try:
     import pandas as pd
@@ -305,12 +318,19 @@ class LGBMInferenceEngine:
     dict instead of a numpy array — we detect it automatically.
     """
 
+    # Isotropic 1-sigma combined position uncertainty (m) used to build the
+    # analytic-Pc covariance when the conjunction dict carries none. Tuned so
+    # the Foster Pc is comparable to the physics floor on close approaches and
+    # negligible on genuinely safe far/slow passes (keeps far misses GREEN).
+    _BASE_POS_SIGMA_M = 200.0
+
     def __init__(self, model_dir: str = None):
         self.fallback    = False
         self.regressor   = None
         self.classifier  = None
         self.encoders    = None
         self._model_dir  = model_dir
+        self._hard_body_radius_m = default_hard_body_radius()
 
         self._load_models()
 
@@ -395,27 +415,71 @@ class LGBMInferenceEngine:
         Input : conjunction dict from ConjunctionFinder.find_all()
         Output: raw_pc float in [0.0, 1.0]
         """
-        # Physics-based collision estimate — calibrated and monotonic in miss
-        # distance. Serves as a SAFETY FLOOR the ML model can never fall below.
+        # Physics-based collision estimate — coarse, monotonic in miss distance.
+        # Serves as an ABSOLUTE SAFETY FLOOR that nothing may fall below.
         phys = self._physics_fallback(conj)
 
+        # First-principles analytic Pc (Foster 2D). Runs even in fallback mode:
+        # it needs only geometry + covariance, not the pkl models.
+        analytic_pc = self._analytic_pc(conj)
+
         if self.fallback:
-            return phys
+            # No ML model — arbitrate physics vs analytic, keep physics floor.
+            fused = max(analytic_pc, phys)
+            return float(min(calibration.apply_if_available(fused), 1.0))
 
         try:
             cdm      = conjunction_dict_to_cdm(conj)
             model_pc = self._run_lgbm(cdm)
         except Exception as e:
-            logger.warning(f"LightGBM inference failed ({e}), using physics floor")
-            return phys
+            logger.warning(f"LightGBM inference failed ({e}), using analytic/physics floor")
+            fused = max(analytic_pc, phys)
+            return float(min(calibration.apply_if_available(fused), 1.0))
 
-        # Safety-first blend: the ML model may only refine risk UPWARD. On the
-        # conjunction-geometry path it runs on ~90 adapter-fabricated CDM features,
-        # far outside its training distribution, and was observed to under-call
-        # close approaches by orders of magnitude (dangerous false-negatives).
-        # Flooring with the physics estimate removes that failure mode while
-        # keeping the model's signal wherever it predicts higher risk.
-        return float(min(max(model_pc, phys), 1.0))
+        # Conservative arbiter: take the MAX of the ML Pc and the analytic Pc.
+        # The ML model runs here on ~90 adapter-fabricated CDM features, far
+        # outside its training distribution, and was observed to under-call
+        # close approaches by many orders of magnitude (dangerous false
+        # negatives). The Foster analytic Pc is a physically-grounded second
+        # opinion; taking the max removes that failure mode while keeping the
+        # model's signal wherever it predicts higher risk.
+        arb = pc_arbiter(model_pc, analytic_pc)
+        if arb["disagreement"]:
+            logger.debug(
+                "Pc arbiter disagreement: ml=%.3e analytic=%.3e → %s",
+                arb["ml_pc"], arb["analytic_pc"], arb["source"],
+            )
+
+        # Apply the trained isotonic calibrator (identity when none is present),
+        # then enforce the physics floor as a hard lower bound and clamp.
+        calibrated = calibration.apply_if_available(arb["pc"])
+        return float(min(max(calibrated, phys), 1.0))
+
+    def _analytic_pc(self, conj: dict) -> float:
+        """Foster 2D analytic Pc from the conjunction geometry.
+
+        The conjunction dict carries no covariance, so we synthesise an
+        isotropic combined position covariance whose 1-sigma grows with TLE
+        age (stale tracking ⇒ larger uncertainty ⇒ higher Pc). Degenerate
+        geometry is handled inside compute_pc_foster.
+        """
+        try:
+            miss_vec_m = np.asarray(conj.get("rel_pos", [0.0, 0.0, 0.0]), float) * 1000.0
+            rel_vel_ms = np.asarray(conj.get("rel_vel", [7.8, 0.0, 0.0]), float) * 1000.0
+
+            # Isotropic default covariance, 1-sigma in metres, TLE-age scaled.
+            age_h = float(conj.get("tle_age_hours", 24.0))
+            age_scale = max(1.0, np.sqrt(1.0 + age_h / 72.0))
+            if conj.get("tle_stale"):
+                age_scale *= 1.5
+            sigma_m = self._BASE_POS_SIGMA_M * age_scale
+            cov = np.eye(3) * (sigma_m ** 2)
+
+            return compute_pc_foster(miss_vec_m, rel_vel_ms, cov,
+                                     self._hard_body_radius_m)
+        except Exception as e:
+            logger.debug(f"analytic Pc failed ({e}) — treating as 0")
+            return 0.0
 
     def predict_pc(self, features) -> float:
         """

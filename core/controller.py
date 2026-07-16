@@ -66,9 +66,10 @@ import sys
 import os
 import time
 import json
+import uuid
 import logging
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -77,8 +78,12 @@ from data.conjunction_finder import ConjunctionFinder
 # ← CHANGED: removed extract_features import (no longer needed in run_once)
 from core.risk_scorer     import RiskScorer, SatState, Alert
 
+# ← NEW: typed command-bus contracts + autonomy governance FSM
+from core.schemas         import BurnCommand, BurnAck
+from core.decision_fsm    import DecisionFSM, DecisionState
+
 # ← CHANGED: import LightGBM engine
-from model.lgbm_engine     import LGBMInferenceEngine 
+from model.lgbm_engine     import LGBMInferenceEngine
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +110,24 @@ LGBM_MODEL_DIR = os.path.join(                                 # NEW
 )
 
 LOG_FILE = "onboard_blackbox.log"
+
+# ── Command bus files (must match simulator/orbital.py) ───────────────────────
+# Module-level so tests can monkeypatch them to a tmp dir.
+_DATA_DIR         = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data_files")
+BURN_COMMAND_FILE = os.path.join(_DATA_DIR, "burn_command.json")
+BURN_ACK_FILE     = os.path.join(_DATA_DIR, "burn_ack.json")
+
+# ΔV → burn duration model (thrust-limited): duration = ΔV / accel, clamped.
+BURN_ACCEL_MS2    = 0.05    # m/s² effective thruster acceleration on the bus
+BURN_MIN_DUR_S    = 1.0
+BURN_MAX_DUR_S    = 300.0
+# Ack polling — sim runs 100×, so ~3 s real is generous for a round-trip.
+ACK_TIMEOUT_S     = 3.0
+ACK_POLL_S        = 0.15
+# Achieved-vs-expected ΔV tolerance for verify_burn.
+ACK_DV_ABS_TOL    = 0.05    # m/s
+ACK_DV_REL_TOL    = 0.10    # 10%
 
 
 logging.basicConfig(
@@ -221,26 +244,106 @@ class SatelliteHardwareInterface:
             total_fuel_kg  = 2.0
         )
 
-    def execute_burn(self, dv_vector: np.ndarray, label: str = "") -> bool:
-        dv_mag = np.linalg.norm(dv_vector)
-        fuel_cost = dv_mag * 0.12
-        self._fuel_pct    = max(0, self._fuel_pct - fuel_cost)
-        self._altitude_km += dv_vector[2] * 0.1
+    def execute_burn(self, dv_vector: np.ndarray, label: str = "",
+                     alert_level: str = "", veto_deadline_iso: str = None) -> bool:
+        """Issue a burn by writing a BurnCommand onto the file command bus.
+        The physics simulator (simulator/orbital.py) picks it up on its next
+        tick, applies the ΔV to the real orbit, and writes back a BurnAck.
+        This closes the hardware-in-the-loop — the ΔV actually reaches the
+        spacecraft instead of only mutating local fields."""
+        dv = np.asarray(dv_vector, dtype=float).reshape(-1)
+        dv_mag = float(np.linalg.norm(dv))
+
+        # Thrust-limited burn duration.
+        duration_s = min(BURN_MAX_DUR_S,
+                         max(BURN_MIN_DUR_S, dv_mag / BURN_ACCEL_MS2))
+
+        cmd = BurnCommand(
+            command_id        = uuid.uuid4().hex,
+            issued_at_iso     = datetime.now(timezone.utc).strftime(
+                                    "%Y-%m-%dT%H:%M:%S.%fZ"),
+            dv_eci_ms         = [float(dv[0]), float(dv[1]), float(dv[2])],
+            duration_s        = float(duration_s),
+            label             = label,
+            alert_level       = alert_level,
+            veto_deadline_iso = veto_deadline_iso,
+        )
+        try:
+            cmd.validate()
+        except ValueError as e:
+            log.error(f"❌ Refusing to issue malformed burn command: {e}")
+            return False
+
+        self._last_command = cmd
+        os.makedirs(os.path.dirname(BURN_COMMAND_FILE), exist_ok=True)
+        # Clear any prior ack so verify_burn only matches THIS command.
+        try:
+            if os.path.exists(BURN_ACK_FILE):
+                os.remove(BURN_ACK_FILE)
+        except OSError:
+            pass
+
+        tmp = BURN_COMMAND_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(cmd.to_json())
+        os.replace(tmp, BURN_COMMAND_FILE)
 
         log.info(
             f"🔥 THRUSTER BURN EXECUTED {label} | "
-            f"ΔV = [{dv_vector[0]:.3f}, {dv_vector[1]:.3f}, {dv_vector[2]:.3f}] m/s | "
+            f"ΔV = [{dv[0]:.3f}, {dv[1]:.3f}, {dv[2]:.3f}] m/s | "
             f"Magnitude = {dv_mag:.3f} m/s | "
-            f"Fuel cost = {fuel_cost:.3f}% | "
-            f"Fuel remaining = {self._fuel_pct:.2f}%"
+            f"Duration = {duration_s:.1f}s | "
+            f"Command = {cmd.command_id[:8]} → command bus"
         )
         return True
 
     def verify_burn(self, expected_dv: np.ndarray) -> bool:
-        success = np.random.random() > 0.05
-        if not success:
-            log.warning("⚠️  THRUSTER ANOMALY: Actual position deviates > 500m from expected")
-        return success
+        """Confirm the burn actually happened by polling the command bus for a
+        BurnAck matching the last command, and comparing achieved vs expected
+        ΔV. Replaces the old np.random fake."""
+        cmd = getattr(self, "_last_command", None)
+        if cmd is None:
+            log.warning("⚠️  verify_burn called with no outstanding command")
+            return False
+
+        expected_mag = float(np.linalg.norm(np.asarray(expected_dv, dtype=float)))
+        deadline = time.time() + ACK_TIMEOUT_S
+
+        while time.time() < deadline:
+            ack = self._read_ack()
+            if ack is not None and ack.command_id == cmd.command_id:
+                if not ack.ok:
+                    log.warning(
+                        f"⚠️  THRUSTER ANOMALY: burn not executed "
+                        f"(status={ack.status})")
+                    return False
+                tol = max(ACK_DV_ABS_TOL, ACK_DV_REL_TOL * expected_mag)
+                if abs(ack.achieved_dv_ms - expected_mag) <= tol:
+                    log.info(
+                        f"✅ Burn ack received | achieved ΔV="
+                        f"{ack.achieved_dv_ms:.3f} m/s (expected {expected_mag:.3f}) "
+                        f"| fuel used={ack.fuel_used_kg*1000:.2f} g")
+                    return True
+                log.warning(
+                    f"⚠️  THRUSTER ANOMALY: achieved ΔV {ack.achieved_dv_ms:.3f} m/s "
+                    f"deviates from expected {expected_mag:.3f} m/s (tol {tol:.3f})")
+                return False
+            time.sleep(ACK_POLL_S)
+
+        log.warning(
+            "⚠️  THRUSTER ANOMALY: no burn ack within "
+            f"{ACK_TIMEOUT_S:.1f}s — simulator may be offline")
+        return False
+
+    @staticmethod
+    def _read_ack():
+        try:
+            if not os.path.exists(BURN_ACK_FILE):
+                return None
+            with open(BURN_ACK_FILE) as f:
+                return BurnAck.from_json(f.read())
+        except (json.JSONDecodeError, ValueError, OSError):
+            return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -262,6 +365,9 @@ class ACASController:
         self.scorer       = RiskScorer()
         self.finder       = ConjunctionFinder()
         self.hardware     = SatelliteHardwareInterface()
+        self.fsm          = DecisionFSM()   # autonomy governance gate
+        log.info(f"  Decision gate: veto_window={self.fsm.veto_window_s:.0f}s | "
+                 f"max_autonomous_dv={self.fsm.max_autonomous_dv_ms:.1f} m/s")
 
         self.my_propagator = OrbitPropagator(MY_TLE_LINE1, MY_TLE_LINE2)
 
@@ -350,59 +456,88 @@ class ACASController:
         return assessments
 
     def _act(self, assessment, sat: SatState, conjunction: dict):
-        if assessment.alert == Alert.GREEN:
+        """Route the assessment through the DecisionFSM governance gate and act
+        on the resulting state. Replaces the old inline decide/act if-else while
+        preserving the demo log narrative (🟡 / 🟠 / 🔴 / downlink lines)."""
+        alert = assessment.alert
+        obj   = assessment.object_id
+
+        # ── 1. Service an in-flight ground-veto window from a previous loop ────
+        if self.fsm.state == DecisionState.AWAIT_GROUND_VETO:
+            self.fsm.poll()
+            if self.fsm.should_execute:
+                log.warning("  Ground veto window elapsed with no veto "
+                            "→ EXECUTING held maneuver.")
+                self._execute_maneuver(self._pending_dv, self._pending_assessment,
+                                       sat, "RED-VETO-EXPIRED")
+                return
+            if alert in (Alert.GREEN, Alert.YELLOW):
+                self.fsm.submit(alert, sat.ground_contact, 0.0, obj)  # threat lifted
+            else:
+                log.info(f"  ⏳ Awaiting ground veto on {obj} — holding maneuver.")
             return
 
-        elif assessment.alert == Alert.YELLOW:
-            log.info(
-                f"🟡 YELLOW ALERT: {assessment.object_id} | "
-                f"Increasing scan frequency. Alert downlinked."
-            )
+        # ── 2. Fresh decision ─────────────────────────────────────────────────
+        dv = (self.rl_agent.predict_burn(conjunction, sat)
+              if alert in (Alert.ORANGE, Alert.RED) else np.zeros(3))
+        dv    = np.asarray(dv, dtype=float).reshape(-1)
+        dv_ms = float(np.linalg.norm(dv))
 
-        elif assessment.alert == Alert.ORANGE:
-            dv = self.rl_agent.predict_burn(conjunction, sat)
+        state = self.fsm.submit(alert, sat.ground_contact, dv_ms, obj)
+        self._pending_dv         = dv
+        self._pending_assessment = assessment
+
+        if state == DecisionState.NOMINAL:              # GREEN
+            return
+
+        if state == DecisionState.ALERT:                # YELLOW
             log.info(
-                f"🟠 ORANGE ALERT: {assessment.object_id} | "
-                f"Maneuver computed: ΔV={np.linalg.norm(dv):.2f} m/s"
-            )
-            if sat.ground_contact:
-                self._downlink_maneuver_request(assessment, dv)
-            else:
-                if conjunction['tca_hours'] < 2.0:
-                    log.info(
-                        f"  TCA={conjunction['tca_hours']:.2f}h < 2h threshold "
-                        f"and no ground contact → EXECUTING AUTONOMOUSLY"
-                    )
-                    self._execute_maneuver(dv, assessment, sat, "ORANGE-AUTO")
+                f"🟡 YELLOW ALERT: {obj} | "
+                f"Increasing scan frequency. Alert downlinked.")
+            return
+
+        if state == DecisionState.PLAN:
+            if alert == Alert.ORANGE:
+                log.info(
+                    f"🟠 ORANGE ALERT: {obj} | "
+                    f"Maneuver computed: ΔV={dv_ms:.2f} m/s")
+                if sat.ground_contact:
+                    self._downlink_maneuver_request(assessment, dv)
                 else:
-                    log.info(
-                        f"  Maneuver queued. TCA={conjunction['tca_hours']:.2f}h. "
-                        f"Will auto-execute if contact not restored."
-                    )
-
-        else:  # RED
-            dv = self.rl_agent.predict_burn(conjunction, sat)
-            log.warning(
-                f"🔴 RED ALERT: {assessment.object_id} | "
-                f"Pc={assessment.adjusted_pc:.2e} | "
-                f"TCA={conjunction['tca_hours']:.2f}h | "
-                f"ΔV={np.linalg.norm(dv):.2f} m/s"
-            )
-            if sat.ground_contact:
-                log.warning("  Ground contact active. Executing with ground confirmation.")
-                self._execute_maneuver(dv, assessment, sat, "RED-GROUND")
-            else:
+                    log.info("  No ground contact — maneuver prepared, "
+                             "awaiting escalation to RED.")
+            else:  # RED held for explicit ground ack (oversize ΔV / autonomy off)
                 log.warning(
-                    "  NO GROUND CONTACT. "
-                    "EXECUTING AUTONOMOUSLY. "
-                    "Event logged to black box."
-                )
-                self._execute_maneuver(dv, assessment, sat, "RED-AUTONOMOUS")
+                    f"🔴 RED ALERT: {obj} | ΔV={dv_ms:.2f} m/s | "
+                    f"Held in PLAN — {self.fsm.last_reason}")
+                self._downlink_maneuver_request(assessment, dv)
+            return
+
+        if state == DecisionState.AWAIT_GROUND_VETO:    # RED, ground, ΔV in budget
+            log.warning(
+                f"🔴 RED ALERT: {obj} | Pc={assessment.adjusted_pc:.2e} | "
+                f"TCA={conjunction['tca_hours']:.2f}h | ΔV={dv_ms:.2f} m/s")
+            log.warning(
+                f"  Ground contact active. Burn staged — ground has "
+                f"{self.fsm.veto_window_s:.0f}s to veto, else autonomous execution.")
+            return
+
+        if state == DecisionState.EXECUTE:              # RED, no link → autonomous
+            log.warning(
+                f"🔴 RED ALERT: {obj} | Pc={assessment.adjusted_pc:.2e} | "
+                f"TCA={conjunction['tca_hours']:.2f}h | ΔV={dv_ms:.2f} m/s")
+            log.warning(
+                "  NO GROUND CONTACT. EXECUTING AUTONOMOUSLY. "
+                "Event logged to black box.")
+            self._execute_maneuver(dv, assessment, sat, "RED-AUTONOMOUS")
+            return
 
     def _execute_maneuver(self, dv: np.ndarray, assessment,
                            sat: SatState, label: str):
-        success = self.hardware.execute_burn(dv, label)
+        success = self.hardware.execute_burn(dv, label,
+                                             alert_level=assessment.alert.value)
         if success:
+            self.fsm.begin_verify()
             burn_ok = self.hardware.verify_burn(dv)
             if burn_ok:
                 log.info("✅ Burn verified. Trajectory updated.")
@@ -411,6 +546,8 @@ class ACASController:
                     "❌ BURN ANOMALY: Position mismatch > 500m. "
                     "Flagged for ground investigation on next pass."
                 )
+            self.fsm.finish_verify(burn_ok)
+            self.fsm.recover()
             self.maneuver_log.append({
                 'time':       datetime.utcnow().isoformat(),
                 'object':     assessment.object_id,
@@ -420,6 +557,9 @@ class ACASController:
                 'fuel_cost':  assessment.fuel_cost_pct,
                 'autonomous': 'AUTONOMOUS' in label
             })
+        else:
+            # Command was refused before reaching the bus — abandon this cycle.
+            self.fsm.reset()
 
     def _check_post_maneuver_path(self, conjunction: dict, sat: SatState) -> bool:
         risk_factor = max(0, (2.0 - conjunction['tca_hours']) / 2.0)

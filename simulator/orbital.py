@@ -57,8 +57,18 @@ from copy import deepcopy
 
 # ── File path ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-MODEL_FILE   = os.path.join(SCRIPT_DIR, "..", "data_files", "satellite_model.json")
+DATA_DIR     = os.path.join(SCRIPT_DIR, "..", "data_files")
+MODEL_FILE   = os.path.join(DATA_DIR, "satellite_model.json")
 TEMP_FILE    = MODEL_FILE + ".tmp"   # atomic write via rename
+
+# ── Command bus (closes the hardware-in-the-loop with core/controller.py) ──────
+# The controller writes BurnCommand JSON here; each tick we pick it up, apply
+# the ΔV, and write a BurnAck back. Paths are module-level constants so tests
+# can monkeypatch them to a tmp dir.
+BURN_COMMAND_FILE       = os.path.join(DATA_DIR, "burn_command.json")
+BURN_ACK_FILE           = os.path.join(DATA_DIR, "burn_ack.json")
+BURN_REJECTED_FILE      = os.path.join(DATA_DIR, "burn_command.rejected.json")
+STALE_COMMAND_MAX_AGE_S = 120.0   # ignore commands older than this (sim-seconds)
 
 # ── Simulation config ─────────────────────────────────────────────────────────
 UPDATE_INTERVAL_S = 1.0     # real seconds between file writes
@@ -179,6 +189,99 @@ def keplerian_to_eci(a: float, e: float, i_deg: float, raan_deg: float,
         'vel_x': vx, 'vel_y': vy, 'vel_z': vz,
         'r': r, 'nu_deg': nu / DEG,
         'E_deg': E / DEG,
+    }
+
+
+def eci_to_keplerian(rx: float, ry: float, rz: float,
+                     vx: float, vy: float, vz: float) -> dict:
+    """
+    Inverse of keplerian_to_eci: convert an ECI state vector (r in km, v in
+    km/s) back to classical Keplerian elements. Same GM / km / km/s / degree
+    conventions used throughout this file, so a round-trip
+    keplerian_to_eci → eci_to_keplerian is (to numerical precision) the identity.
+
+    Standard rv2coe algorithm (Vallado):
+      1. angular momentum   h = r × v
+      2. node vector        n = ẑ × h
+      3. eccentricity vector e = ((|v|²-GM/|r|)·r - (r·v)·v) / GM
+      4. energy → a,  and the usual angle extractions with quadrant checks.
+
+    Returns dict: a (km), e, i (deg), raan (deg), w (deg), M (deg), nu (deg).
+    Near-circular / near-equatorial singularities are handled so the slightly
+    eccentric, inclined Power House orbit stays continuous across a burn.
+    """
+    r     = [rx, ry, rz]
+    v     = [vx, vy, vz]
+    rmag  = math.sqrt(rx*rx + ry*ry + rz*rz)
+    vmag2 = vx*vx + vy*vy + vz*vz
+    rdotv = rx*vx + ry*vy + rz*vz
+
+    # 1. specific angular momentum h = r × v
+    hx = ry*vz - rz*vy
+    hy = rz*vx - rx*vz
+    hz = rx*vy - ry*vx
+    hmag = math.sqrt(hx*hx + hy*hy + hz*hz)
+
+    # 2. node vector n = ẑ × h = (-hy, hx, 0)
+    nx, ny = -hy, hx
+    nmag = math.sqrt(nx*nx + ny*ny)
+
+    # 3. eccentricity vector
+    ex = ((vmag2 - GM/rmag)*rx - rdotv*vx) / GM
+    ey = ((vmag2 - GM/rmag)*ry - rdotv*vy) / GM
+    ez = ((vmag2 - GM/rmag)*rz - rdotv*vz) / GM
+    e  = math.sqrt(ex*ex + ey*ey + ez*ez)
+
+    # 4a. semi-major axis from vis-viva energy
+    energy = vmag2/2.0 - GM/rmag
+    a = -GM / (2.0 * energy)
+
+    # 4b. inclination
+    i = math.acos(max(-1.0, min(1.0, hz/hmag)))
+
+    # 4c. RAAN
+    if nmag > 1e-12:
+        raan = math.acos(max(-1.0, min(1.0, nx/nmag)))
+        if ny < 0.0:
+            raan = 2.0*math.pi - raan
+    else:
+        raan = 0.0  # equatorial — RAAN undefined
+
+    # 4d. argument of perigee
+    if nmag > 1e-12 and e > 1e-12:
+        w = math.acos(max(-1.0, min(1.0, (nx*ex + ny*ey) / (nmag*e))))
+        if ez < 0.0:
+            w = 2.0*math.pi - w
+    else:
+        w = 0.0  # circular — arg. perigee undefined
+
+    # 4e. true anomaly
+    if e > 1e-12:
+        nu = math.acos(max(-1.0, min(1.0, (ex*rx + ey*ry + ez*rz) / (e*rmag))))
+        if rdotv < 0.0:
+            nu = 2.0*math.pi - nu
+    else:
+        # circular orbit — measure from ascending node (argument of latitude)
+        if nmag > 1e-12:
+            nu = math.acos(max(-1.0, min(1.0, (nx*rx + ny*ry) / (nmag*rmag))))
+            if rz < 0.0:
+                nu = 2.0*math.pi - nu
+        else:
+            nu = math.atan2(ry, rx) % (2.0*math.pi)
+
+    # 4f. eccentric → mean anomaly
+    E = 2.0 * math.atan2(math.sqrt(max(0.0, 1.0 - e)) * math.sin(nu/2.0),
+                         math.sqrt(max(0.0, 1.0 + e)) * math.cos(nu/2.0))
+    M = E - e*math.sin(E)
+
+    return {
+        'a':    a,
+        'e':    e,
+        'i':    (i    / DEG) % 360.0,
+        'raan': (raan / DEG) % 360.0,
+        'w':    (w    / DEG) % 360.0,
+        'M':    (M    / DEG) % 360.0,
+        'nu':   (nu   / DEG) % 360.0,
     }
 
 
@@ -372,12 +475,167 @@ class PowerHouseSatellite:
         print(f"[Power House] Press Ctrl+C to stop\n")
 
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Command bus — closes the hardware-in-the-loop with core/controller.py.
+    # The controller writes a BurnCommand (data_files/burn_command.json); we
+    # validate it inline (this module stays fully standalone — no project
+    # imports), apply the ΔV to the live orbit, deduct fuel via Tsiolkovsky,
+    # write a BurnAck, and consume the command file so it is applied once.
+    # ─────────────────────────────────────────────────────────────────────────
+    def _maybe_apply_burn_command(self):
+        if not os.path.exists(BURN_COMMAND_FILE):
+            return
+
+        # 1. Read + parse. Malformed JSON is quarantined, not fatal.
+        try:
+            with open(BURN_COMMAND_FILE) as f:
+                cmd = json.load(f)
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            self._reject_command(reason=f"malformed JSON ({e})",
+                                 command_id="UNKNOWN", quarantine=True)
+            return
+
+        # 2. Validate required fields / shapes inline.
+        try:
+            command_id = cmd["command_id"]
+            issued_at  = cmd["issued_at_iso"]
+            dv         = [float(x) for x in cmd["dv_eci_ms"]]
+            duration_s = float(cmd["duration_s"])
+            if len(dv) != 3:
+                raise ValueError("dv_eci_ms must have 3 components")
+            if duration_s <= 0:
+                raise ValueError("duration_s must be > 0")
+            if not isinstance(command_id, str) or not command_id:
+                raise ValueError("command_id must be a non-empty string")
+        except (KeyError, TypeError, ValueError) as e:
+            self._reject_command(reason=f"invalid BurnCommand ({e})",
+                                 command_id=str(cmd.get("command_id", "UNKNOWN")),
+                                 quarantine=True)
+            return
+
+        # 3. Staleness guard — ignore commands issued too long ago.
+        age_s = self._command_age_s(issued_at)
+        if age_s is None or age_s > STALE_COMMAND_MAX_AGE_S:
+            self._reject_command(
+                reason=f"stale command (age={age_s})",
+                command_id=command_id, quarantine=False,
+                status="REJECTED_STALE")
+            return
+
+        # 4. Apply the ΔV.
+        self._apply_burn(command_id, dv, duration_s)
+
+    def _apply_burn(self, command_id: str, dv_ms, duration_s: float):
+        """Apply an instantaneous ΔV (ECI, m/s) to the current orbit, update
+        the mean-anomaly reference so propagation stays continuous, deduct
+        fuel, arm the burn window, and acknowledge."""
+        # Current mean anomaly and ECI state on the *current* orbit.
+        n_deg_s  = 360.0 / self.T
+        M_now    = (self.M0 + n_deg_s * self.sim_time) % 360.0
+        eci      = keplerian_to_eci(self.a, self.e, self.i, self.raan, self.w, M_now)
+
+        # Add ΔV (m/s → km/s) to the velocity vector.
+        vx = eci['vel_x'] + dv_ms[0] / 1000.0
+        vy = eci['vel_y'] + dv_ms[1] / 1000.0
+        vz = eci['vel_z'] + dv_ms[2] / 1000.0
+
+        el = eci_to_keplerian(eci['pos_x'], eci['pos_y'], eci['pos_z'], vx, vy, vz)
+
+        # Commit new elements.
+        self.a    = el['a']
+        self.e    = el['e']
+        self.i    = el['i']
+        self.raan = el['raan']
+        self.w    = el['w']
+
+        # Recompute period / mean-motion / J2 rates for the new orbit, then
+        # re-anchor M0 so that (M0 + n*sim_time) reproduces the post-burn M now.
+        self.T  = 2.0 * math.pi * math.sqrt(self.a**3 / GM)
+        self.j2 = compute_j2_drift(self.a, self.e, self.i)
+        n_new   = 360.0 / self.T
+        self.M0 = (el['M'] - n_new * self.sim_time) % 360.0
+        self.prev_M = el['M']
+
+        # Fuel: Tsiolkovsky on the spacecraft wet mass (Isp, g0, mass already
+        # defined for this module). Δm = m·(1 - e^(-Δv/(Isp·g0))).
+        dv_mag = math.sqrt(sum(x*x for x in dv_ms))
+        dm_kg  = SAT_MASS_KG * (1.0 - math.exp(-dv_mag / (ISP * G0)))
+        self.fuel_kg = max(0.0, self.fuel_kg - dm_kg)
+
+        # Arm the burn window (drives thruster_active / power / thermal state).
+        self.burn_active  = True
+        self.burn_timer_s = duration_s
+        self.burn_dv      = list(dv_ms)
+        self.total_dv_ms += dv_mag
+
+        print(f"[ACAS] 🔥 Burn applied {command_id} | ΔV={dv_mag:.3f} m/s "
+              f"| new a={self.a:.3f} km | fuel={self.fuel_kg:.4f} kg "
+              f"(-{dm_kg*1000:.2f} g)")
+
+        self._write_ack(command_id, achieved_dv_ms=dv_mag,
+                        fuel_used_kg=dm_kg, status="OK")
+
+        # Consume the command so it is never re-applied.
+        try:
+            os.remove(BURN_COMMAND_FILE)
+        except OSError:
+            pass
+
+    def _command_age_s(self, issued_at_iso):
+        """Wall-clock age of a command in seconds, or None if unparseable."""
+        try:
+            txt = issued_at_iso.strip()
+            if txt.endswith("Z"):
+                txt = txt[:-1]
+            issued = datetime.fromisoformat(txt)
+            if issued.tzinfo is None:
+                issued = issued.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            return (now - issued).total_seconds()
+        except (ValueError, AttributeError):
+            return None
+
+    def _reject_command(self, reason, command_id, quarantine,
+                        status="REJECTED_MALFORMED"):
+        print(f"[ACAS] ⚠️  Burn command rejected: {reason}")
+        self._write_ack(command_id, achieved_dv_ms=0.0, fuel_used_kg=0.0,
+                        status=status)
+        try:
+            if quarantine:
+                os.replace(BURN_COMMAND_FILE, BURN_REJECTED_FILE)
+            else:
+                os.remove(BURN_COMMAND_FILE)
+        except OSError:
+            pass
+
+    def _write_ack(self, command_id, achieved_dv_ms, fuel_used_kg, status):
+        """Write a BurnAck JSON (schema mirrors core/schemas.BurnAck)."""
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        ack = {
+            "command_id":      command_id,
+            "executed_at_iso": now_iso,
+            "achieved_dv_ms":  round(float(achieved_dv_ms), 6),
+            "fuel_used_kg":    round(float(fuel_used_kg), 8),
+            "status":          status,
+        }
+        tmp = BURN_ACK_FILE + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump(ack, f, indent=2)
+            os.replace(tmp, BURN_ACK_FILE)
+        except OSError as e:
+            print(f"[ACAS] ⚠️  Could not write burn ack: {e}")
+
     def step(self, dt_sim: float):
         """
         Advance simulation by dt_sim seconds (simulation time).
         Called every UPDATE_INTERVAL_S real seconds.
         dt_sim = UPDATE_INTERVAL_S × SIM_SPEED_FACTOR
         """
+        # ── 0. Command bus: pick up any ΔV command from the ACAS controller ───
+        # Done before advancing time so the burn is applied to the current state.
+        self._maybe_apply_burn_command()
+
         self.sim_time += dt_sim
         self.uptime_hours = self.sim_time / 3600.0
 
