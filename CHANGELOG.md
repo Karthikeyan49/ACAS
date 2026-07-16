@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.1.0] — 2026-07-16
+
+### Added
+- core/pc_analytic.py — Foster 2D analytic collision probability + a
+  conservative arbiter that takes max(model Pc, analytic Pc)
+- model/calibration.py — isotonic Pc calibration with reliability diagrams
+  (graceful identity fallback when no calibrator artifact is present)
+- core/config_loader.py — shared loader making config/thresholds.yaml the
+  real source of truth for alert bands, fuel scaling, and the decision gate
+- core/decision_fsm.py — autonomy governance state machine with a
+  ground-veto window and a max-autonomous-ΔV budget
+- core/schemas.py — typed dataclass contracts (ConjunctionEvent,
+  BurnCommand, BurnAck) at module boundaries
+- Closed hardware-in-the-loop: controller writes burn_command.json, the
+  simulator applies the ΔV to its live orbit and returns burn_ack.json
+
+### Changed
+- core/risk_scorer.py reads thresholds from config/thresholds.yaml
+- model/lgbm_engine.py Pc now passes through the analytic arbiter + calibrator
+- dashboard 3D scene: labelled satellite + orbit trail, alert-coloured debris
+  markers with pulsing halos, and a high-clarity thruster-fire effect
+- simulator/orbital.py verify path replaces the previous np.random burn stub
+
 ## [2.0.0] — 2026-03-06
 
 ### Changed
