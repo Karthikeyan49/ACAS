@@ -70,6 +70,7 @@ import logging
 import numpy as np
 from datetime import datetime, timedelta
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.tle_fetcher        import TLEFetcher, OrbitPropagator
 from data.conjunction_finder import ConjunctionFinder
@@ -95,7 +96,7 @@ LOOP_INTERVAL_SEC = 60
 TLE_REFRESH_MIN  = 90
 
 ONNX_MODEL_PATH  = "trained_models/conjunction_model.onnx"   # kept for reference
-RL_MODEL_PATH    = "trained_models/maneuver_policy"
+RL_MODEL_PATH    = "trained_models/rl/maneuver_policy"
 
 # ← CHANGED: path to LightGBM models
 LGBM_MODEL_DIR = os.path.join(                                 # NEW

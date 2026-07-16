@@ -56,7 +56,7 @@ from core.risk_scorer   import RiskScorer, SatState, Alert
 
 MODEL_FILE = os.path.join(ROOT, "data_files", "satellite_model.json")
 ONNX_PATH  = os.path.join(ROOT, "trained_models", "conjunction_model.onnx")
-RL_PATH    = os.path.join(ROOT, "trained_models", "maneuver_policy")
+RL_PATH    = os.path.join(ROOT, "trained_models", "rl", "maneuver_policy")
 
 # ============================================================
 # PAGE CONFIG + GLOBAL CSS

@@ -62,7 +62,7 @@ import os
 # ─────────────────────────────────────────────────────────────────────────────
 DATA_PATH    = "data/satellite_conjunctions.csv"   # ← change to your CSV path
 OUTPUT_DIR   = "outputs"
-BASE_DIR  = "/home/karthikeyan/vscode/ACAS"
+BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_DIR = os.path.join(BASE_DIR, "trained_models", "lgbm")
 PLOT_DIR     = os.path.join(OUTPUT_DIR, "plots")
 LOG_DIR      = os.path.join(OUTPUT_DIR, "logs")
