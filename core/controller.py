@@ -182,7 +182,9 @@ class SatelliteHardwareInterface:
     def read_state(self) -> SatState:
         # Try to read from satellite_model.json (live sim data)
         try:
-            model_path = os.path.join(os.path.dirname(...), "data_files", "satellite_model.json") 
+            _CONTROLLER_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            # then line 185:
+            model_path = os.path.join(_CONTROLLER_ROOT, "data_files", "satellite_model.json")
             
             if os.path.exists(model_path):
                 with open(model_path) as f:

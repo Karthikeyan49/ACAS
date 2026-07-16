@@ -181,10 +181,18 @@ def propagate(tle: Dict, dt_minutes: float) -> Tuple[np.ndarray, np.ndarray]:
         velocity_km_s: np.array([vx, vy, vz]) in ECI frame
     """
     try:
-        return _propagate_sgp4(tle, dt_minutes)
+        pos, vel = _propagate_sgp4(tle, dt_minutes)
+        # SGP4 can return err=0 with non-finite state for stale/invalid TLEs.
+        # Guard explicitly and degrade to the analytic propagator rather than
+        # letting nan/inf leak downstream (was the cause of miss_distance=inf).
+        if np.all(np.isfinite(pos)) and np.all(np.isfinite(vel)):
+            return pos, vel
+        logger.debug("SGP4 returned non-finite state — falling back to Keplerian")
     except ImportError:
         logger.debug("sgp4 not installed — using Keplerian propagator")
-        return _propagate_keplerian(tle, dt_minutes)
+    except Exception as e:
+        logger.debug(f"SGP4 failed ({e}) — using Keplerian propagator")
+    return _propagate_keplerian(tle, dt_minutes)
 
 
 def _propagate_sgp4(tle: Dict, dt_minutes: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -323,12 +331,24 @@ def find_tca(sat_tle: Dict, obj_tle: Dict) -> Dict:
     tca_min_coarse = 0.0
 
     for t_min in coarse_steps:
-        r_s, _ = propagate(sat_tle, t_min)
-        r_o, _ = propagate(obj_tle, t_min)
+        try:
+            r_s, _ = propagate(sat_tle, t_min)
+            r_o, _ = propagate(obj_tle, t_min)
+        except Exception:
+            continue
         d = np.linalg.norm(r_s - r_o)
-        if d < min_dist_km:
+        if np.isfinite(d) and d < min_dist_km:
             min_dist_km     = d
             tca_min_coarse  = t_min
+
+    # No finite state anywhere in the window — refuse to emit inf/nan (which
+    # would crash JSON serialisation in the API). Surface a clear error instead.
+    if not np.isfinite(min_dist_km):
+        raise ValueError(
+            "Could not compute a valid conjunction: orbit propagation produced "
+            "no finite states over the search window. Check that both TLEs are "
+            "well-formed and their epochs are not excessively stale."
+        )
 
     # ── Phase 2: Fine scan ± 5 minutes around coarse TCA ─────────────────
     fine_start = max(0, tca_min_coarse - 5)
@@ -340,10 +360,13 @@ def find_tca(sat_tle: Dict, obj_tle: Dict) -> Dict:
 
     for t_sec in fine_steps:
         t_min_f = t_sec / 60.0
-        r_s, _ = propagate(sat_tle, t_min_f)
-        r_o, _ = propagate(obj_tle, t_min_f)
+        try:
+            r_s, _ = propagate(sat_tle, t_min_f)
+            r_o, _ = propagate(obj_tle, t_min_f)
+        except Exception:
+            continue
         d = np.linalg.norm(r_s - r_o)
-        if d < min_dist_km:
+        if np.isfinite(d) and d < min_dist_km:
             min_dist_km = d
             tca_sec     = t_sec
 

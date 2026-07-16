@@ -201,7 +201,7 @@ def conjunction_dict_to_cdm(conj: dict, sat_tle_str: str = None) -> dict:
         # Chaser (object)
         "c_j2k_sma":               typical_sma + conj.get('miss_km', 1.0) * 0.5,
         "c_j2k_ecc":               0.001,
-        "c_j2k_inc":               typical_inc + np.random.uniform(-15, 15),
+        "c_j2k_inc":               typical_inc,   # deterministic — was np.random.uniform (made Pc non-reproducible)
         "c_h_apo":                 551.0,
         "c_h_per":                 540.0,
         "c_span":                  2.0,
@@ -395,15 +395,27 @@ class LGBMInferenceEngine:
         Input : conjunction dict from ConjunctionFinder.find_all()
         Output: raw_pc float in [0.0, 1.0]
         """
+        # Physics-based collision estimate — calibrated and monotonic in miss
+        # distance. Serves as a SAFETY FLOOR the ML model can never fall below.
+        phys = self._physics_fallback(conj)
+
         if self.fallback:
-            return self._physics_fallback(conj)
+            return phys
 
         try:
-            cdm = conjunction_dict_to_cdm(conj)
-            return self._run_lgbm(cdm)
+            cdm      = conjunction_dict_to_cdm(conj)
+            model_pc = self._run_lgbm(cdm)
         except Exception as e:
-            logger.warning(f"LightGBM inference failed ({e}), using fallback")
-            return self._physics_fallback(conj)
+            logger.warning(f"LightGBM inference failed ({e}), using physics floor")
+            return phys
+
+        # Safety-first blend: the ML model may only refine risk UPWARD. On the
+        # conjunction-geometry path it runs on ~90 adapter-fabricated CDM features,
+        # far outside its training distribution, and was observed to under-call
+        # close approaches by orders of magnitude (dangerous false-negatives).
+        # Flooring with the physics estimate removes that failure mode while
+        # keeping the model's signal wherever it predicts higher risk.
+        return float(min(max(model_pc, phys), 1.0))
 
     def predict_pc(self, features) -> float:
         """

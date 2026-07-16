@@ -1,0 +1,19 @@
+# requirements_onboard.txt — ACAS Flight Software Only
+# ======================================================
+# 4 packages. Everything else is ground-station software.
+#
+# Ground-only (NOT here):
+#   streamlit, plotly, pandas     dashboard/
+#   torch, stable-baselines3      RL training
+#   gymnasium, optuna, shap       training tools
+#   scikit-learn                  preprocessing
+#   fastapi, uvicorn              api/
+#
+# Indigenisation roadmap (post IN-SPACe funding):
+#   lightgbm → export to ONNX → C onnxruntime
+#   At that point: 0 Python dependencies in flight software
+
+sgp4>=2.22
+numpy>=1.24
+requests>=2.31
+lightgbm>=4.0

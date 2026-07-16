@@ -1,0 +1,168 @@
+# ═══════════════════════════════════════════════════════════════════
+# docker-compose.yml — ACAS Full System
+# New ACAS/ structure — core/ model/ simulator/ data/
+# ═══════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+
+  # ── SPACE SEGMENT: Orbital Simulator ────────────────────────────
+  acas-obc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: acas-obc:latest
+    container_name: acas_obc
+
+    # OBC hardware constraints
+    # GomSpace NanoMind / ISIS iOBC class hardware
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 64M
+
+    volumes:
+      # Telemetry downlink — OBC writes, ground dashboard reads
+      - ./data_files/satellite_model.json:/acas/data_files/satellite_model.json
+      # Trained LightGBM models — read-only
+      - ./trained_models/lgbm:/acas/trained_models/lgbm:ro
+
+    environment:
+      - SPACETRACK_USER=${SPACETRACK_USER:-demo_mode}
+      - SPACETRACK_PASS=${SPACETRACK_PASS:-demo_mode}
+      - ACAS_MODE=HIL_SIMULATION
+      - PYTHONPATH=/acas
+      - PYTHONUNBUFFERED=1
+
+    command: python simulator/orbital.py
+
+    restart: unless-stopped
+    networks: [acas_net]
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+
+  # ── SPACE SEGMENT: ACAS Controller ──────────────────────────────
+  acas-controller:
+    image: acas-obc:latest
+    container_name: acas_controller
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 64M
+
+    volumes:
+      - ./data_files/satellite_model.json:/acas/data_files/satellite_model.json
+      - ./trained_models/lgbm:/acas/trained_models/lgbm:ro
+      - ./onboard_blackbox.log:/acas/onboard_blackbox.log
+
+    environment:
+      - SPACETRACK_USER=${SPACETRACK_USER:-demo_mode}
+      - SPACETRACK_PASS=${SPACETRACK_PASS:-demo_mode}
+      - ACAS_MODE=HIL_SIMULATION
+      - PYTHONPATH=/acas
+      - PYTHONUNBUFFERED=1
+
+    command: python core/controller.py
+
+    depends_on:
+      acas-obc:
+        condition: service_started
+
+    restart: unless-stopped
+    networks: [acas_net]
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ── GROUND SEGMENT: Streamlit Dashboard ─────────────────────────
+  acas-ground:
+    build:
+      context: .
+      dockerfile: Dockerfile.ground
+    image: acas-ground:latest
+    container_name: acas_ground
+
+    ports:
+      - "8501:8501"
+
+    volumes:
+      # Read-only telemetry from OBC
+      - ./data_files/satellite_model.json:/acas/data_files/satellite_model.json:ro
+      - ./outputs:/acas/outputs:ro
+
+    environment:
+      - PYTHONPATH=/acas
+      - PYTHONUNBUFFERED=1
+
+    command: >
+      streamlit run dashboard/app.py
+        --server.port=8501
+        --server.address=0.0.0.0
+        --server.headless=true
+
+    depends_on:
+      acas-obc:
+        condition: service_started
+
+    restart: unless-stopped
+    networks: [acas_net]
+
+
+  # ── VALIDATION: C vs Python proof run ───────────────────────────
+  # Run with: docker compose --profile validate up acas-validate
+  acas-validate:
+    image: acas-obc:latest
+    container_name: acas_validate
+    profiles: [validate]
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+    volumes:
+      - ./data_files/satellite_model.json:/acas/data_files/satellite_model.json:ro
+      - ./trained_models/lgbm:/acas/trained_models/lgbm:ro
+      - .:/acas/host_output
+
+    environment:
+      - PYTHONPATH=/acas
+
+    command: >
+      sh -c "
+        echo '=== C RISK SCORER TESTS ===' &&
+        c_port/test_risk_scorer &&
+        echo '' &&
+        echo '=== PYTHON vs C COMPARISON ===' &&
+        python c_port/c_risk_scorer_bridge.py &&
+        echo '' &&
+        echo '=== OBC BENCHMARK ===' &&
+        python benchmark_obc.py &&
+        cp obc_benchmark_results.json host_output/ 2>/dev/null || true &&
+        cp c_benchmark_results.json   host_output/ 2>/dev/null || true
+      "
+
+    networks: [acas_net]
+
+
+networks:
+  acas_net:
+    driver: bridge

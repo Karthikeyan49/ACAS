@@ -1,5 +1,13 @@
 Must have — ISRO CDM adapter stub, even if untested against real data. Shows you understand ISRO's data pipeline.
 
+change to your CSV path - config.py
+
+
+
+
+
+
+________________________________________________
 
 
 why:

@@ -6,3 +6,6 @@ c) Significant quantifiable improvement — your model achieves >90% alert accur
 d) Scale-up potential — the same model can protect any ISRO satellite with a configuration change. The ground training pipeline re-trains on new CDM data automatically.
 e) Feasibility using space technology — your simulator/orbital.py uses SGP4 propagation, which is the same algorithm ISRO uses. Your CDM features map directly to CCSDS standard. The edge deployment on Raspberry Pi demonstrates hardware feasibility.
 
+If model load fails → uses a simplified formula
+
+increase to 100+ for production -config.py
