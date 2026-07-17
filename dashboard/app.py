@@ -72,109 +72,153 @@ st.set_page_config(page_title="ACAS – Power House",
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-html,body,.stApp{background:#02040e;color:#c8d8f0;}
-.main .block-container{padding-top:.4rem;padding-bottom:.4rem;max-width:100%;}
-/* ---- mode badge ---- */
-.mode-badge{
-  display:inline-block;padding:6px 22px;border-radius:5px;
-  font-family:'Share Tech Mono',monospace;font-size:14px;
-  font-weight:bold;letter-spacing:3px;border:2px solid;
-  margin-bottom:8px;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ============ DESIGN TOKENS ============
+   bg base   #0a0e17   panel #121826   raised #161d2e
+   border    #232d44   subtle #1a2234
+   text      #dfe6f2   secondary #9aa7c0   muted #6b7a99
+   accent    #4d9fff   data-cyan #38bdf8
+   nominal   #34d399   watch #fbbf24   caution #fb923c   critical #f43f5e
+*/
+:root{
+  --font-ui:'Inter',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',monospace;
 }
-/* ---- metric cards ---- */
-.mc-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
-.mc{background:#07091a;border:1px solid #0d1430;border-radius:5px;
-  padding:7px 12px;flex:1;min-width:90px;}
-.mc-label{font-family:'Share Tech Mono',monospace;font-size:8px;
-  color:#3a4a66;letter-spacing:2px;text-transform:uppercase;display:block;}
-.mc-val{font-family:'Share Tech Mono',monospace;font-size:14px;
-  color:#00d4ff;display:block;margin-top:1px;}
-.mc-green{color:#00ff88;} .mc-yellow{color:#ffd700;}
-.mc-orange{color:#ff8c00;} .mc-red{color:#ff2244;font-weight:bold;}
+html,body,.stApp{background:#0a0e17;color:#dfe6f2;font-family:var(--font-ui);}
+.main .block-container{padding-top:1.1rem;padding-bottom:1rem;max-width:100%;}
+/* kill the default white Streamlit header / toolbar strip */
+[data-testid="stHeader"]{background:transparent;height:0;}
+[data-testid="stToolbar"]{display:none;}
+[data-testid="stDecoration"]{display:none;}
+#MainMenu,footer{visibility:hidden;}
+h1,h2,h3,h4,h5,h6,p,span,div,label{font-family:var(--font-ui);}
+
+/* ---- SIDEBAR (was unstyled/white) ---- */
+[data-testid="stSidebar"]{background:#0c111c;border-right:1px solid #1a2234;}
+[data-testid="stSidebar"] .block-container{padding-top:1.4rem;}
+[data-testid="stSidebar"] label,[data-testid="stSidebar"] p{color:#9aa7c0;}
+[data-testid="stSidebar"] [data-testid="stForm"]{
+  background:#111726;border:1px solid #1e2740;border-radius:10px;padding:14px;}
+
+/* ---- native Streamlit buttons → professional ---- */
+.stButton>button{
+  font-family:var(--font-ui);font-weight:600;font-size:12px;
+  border-radius:8px;border:1px solid #26324e;background:#141b2b;
+  color:#c4d0e6;transition:all .15s ease;letter-spacing:.2px;}
+.stButton>button:hover{border-color:#4d9fff;color:#eaf1ff;background:#182238;}
+.stButton>button[kind="primary"]{
+  background:linear-gradient(135deg,#f43f5e,#c81e3f);border:none;color:#fff;
+  font-weight:700;letter-spacing:.4px;box-shadow:0 2px 12px rgba(244,63,94,.35);}
+.stButton>button[kind="primary"]:hover{filter:brightness(1.08);color:#fff;}
+
+/* ---- expander / divider polish ---- */
+[data-testid="stExpander"]{border:1px solid #1e2740;border-radius:8px;background:#111726;}
+hr{border-color:#1a2234 !important;margin:.9rem 0 !important;}
+
+/* ---- mode badge (mission state) ---- */
+.mode-badge{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:8px;
+  font-family:var(--font-ui);font-size:13px;font-weight:700;letter-spacing:1.5px;
+  border:1px solid;margin-bottom:2px;text-transform:uppercase;}
+.mode-badge::before{content:"";width:8px;height:8px;border-radius:50%;
+  background:currentColor;box-shadow:0 0 8px currentColor;}
+/* ---- metric cards (top telemetry row) ---- */
+.mc-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:2px;}
+.mc{background:#121826;border:1px solid #1e2740;border-radius:9px;
+  padding:9px 14px;flex:1;min-width:96px;}
+.mc-label{font-family:var(--font-ui);font-size:9px;font-weight:600;
+  color:#7382a0;letter-spacing:1.2px;text-transform:uppercase;display:block;}
+.mc-val{font-family:var(--font-mono);font-size:16px;font-weight:500;
+  color:#eaf1ff;display:block;margin-top:3px;}
+.mc-green{color:#34d399;} .mc-yellow{color:#fbbf24;}
+.mc-orange{color:#fb923c;} .mc-red{color:#f43f5e;font-weight:600;}
 /* ---- sidebar vec boxes ---- */
-.vg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin:4px 0 8px;}
-.vc{background:#050710;border:1px solid #0d1430;border-radius:4px;
-  padding:5px 4px;text-align:center;}
-.va{font-family:'Share Tech Mono',monospace;font-size:8px;
-  color:#3a4a66;display:block;letter-spacing:1px;}
-.vn{font-family:'Share Tech Mono',monospace;font-size:11px;
-  color:#00d4ff;display:block;}
+.vg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:5px 0 10px;}
+.vc{background:#0e1420;border:1px solid #1e2740;border-radius:7px;
+  padding:7px 4px;text-align:center;}
+.va{font-family:var(--font-ui);font-size:9px;font-weight:600;
+  color:#7382a0;display:block;letter-spacing:.5px;}
+.vn{font-family:var(--font-mono);font-size:12px;font-weight:500;
+  color:#7dd3fc;display:block;margin-top:2px;}
 /* ---- gauge ---- */
-.g-wrap{margin-bottom:7px;}
+.g-wrap{margin-bottom:11px;}
 .g-head{display:flex;justify-content:space-between;
-  font-family:'Share Tech Mono',monospace;font-size:9px;margin-bottom:2px;}
-.g-lbl{color:#3a4a66;letter-spacing:1px;} .g-val{color:#c8d8f0;}
-.g-bar{height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;}
-.g-fill{height:100%;border-radius:2px;transition:width .6s,background .6s;}
+  font-family:var(--font-ui);font-size:10px;font-weight:600;margin-bottom:4px;}
+.g-lbl{color:#8492ab;letter-spacing:.5px;text-transform:uppercase;}
+.g-val{color:#eaf1ff;font-family:var(--font-mono);}
+.g-bar{height:6px;background:#1a2234;border-radius:4px;overflow:hidden;}
+.g-fill{height:100%;border-radius:4px;transition:width .6s,background .6s;}
 /* ---- pill row ---- */
-.pr{display:flex;gap:5px;margin:5px 0;}
-.pill{font-family:'Share Tech Mono',monospace;font-size:9px;
-  padding:2px 9px;border-radius:9px;letter-spacing:1px;border:1px solid;}
-.p-on{background:rgba(0,255,136,.1);color:#00ff88;border-color:rgba(0,255,136,.3);}
-.p-off{background:rgba(255,34,68,.1);color:#ff2244;border-color:rgba(255,34,68,.3);}
+.pr{display:flex;gap:6px;margin:7px 0;}
+.pill{font-family:var(--font-ui);font-size:10px;font-weight:600;
+  padding:3px 11px;border-radius:6px;letter-spacing:.4px;border:1px solid;}
+.p-on{background:rgba(52,211,153,.12);color:#34d399;border-color:rgba(52,211,153,.35);}
+.p-off{background:rgba(244,63,94,.12);color:#f43f5e;border-color:rgba(244,63,94,.35);}
 /* ---- section title ---- */
-.sec{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:3px;
-  color:#3a4a66;text-transform:uppercase;margin:8px 0 5px;
-  border-bottom:1px solid #0d1430;padding-bottom:3px;}
+.sec{font-family:var(--font-ui);font-size:10px;font-weight:700;letter-spacing:1.5px;
+  color:#8492ab;text-transform:uppercase;margin:14px 0 8px;
+  border-bottom:1px solid #1e2740;padding-bottom:5px;}
 /* ---- right-panel cards ---- */
-.rcard{background:#07091a;border:1px solid #0d1430;border-radius:6px;
-  padding:10px 14px;margin-bottom:8px;}
-.trow{display:flex;justify-content:space-between;align-items:baseline;margin:2px 0;}
-.tkey{font-family:'Share Tech Mono',monospace;font-size:10px;color:#3a4a66;}
-.tval{font-family:'Share Tech Mono',monospace;font-size:11px;color:#00d4ff;}
-.tv-g{color:#00ff88;} .tv-y{color:#ffd700;}
-.tv-o{color:#ff8c00;} .tv-r{color:#ff2244;font-weight:bold;}
+.rcard{background:#121826;border:1px solid #1e2740;border-radius:10px;
+  padding:13px 16px;margin-bottom:10px;}
+.trow{display:flex;justify-content:space-between;align-items:baseline;
+  margin:4px 0;gap:10px;}
+.tkey{font-family:var(--font-ui);font-size:11px;color:#8492ab;font-weight:500;}
+.tval{font-family:var(--font-mono);font-size:12px;color:#eaf1ff;text-align:right;}
+.tv-g{color:#34d399;} .tv-y{color:#fbbf24;}
+.tv-o{color:#fb923c;} .tv-r{color:#f43f5e;font-weight:600;}
 /* ---- scenario card ---- */
-.sc-card{background:#07091a;border:1px solid #0d1430;border-radius:5px;
-  padding:6px 10px;margin-bottom:4px;}
+.sc-card{background:#121826;border:1px solid #1e2740;border-radius:9px;
+  padding:10px 13px;margin-bottom:7px;}
 /* ---- log ---- */
-.mono{font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.8;}
-.lg{color:#00ff88} .ly{color:#ffd700} .lo{color:#ff8c00}
-.lr{color:#ff2244;font-weight:bold} .li{color:#88aaff} .lw{color:#778899}
-.lb{color:#ff6600;font-weight:bold;background:#1a0800;padding:1px 5px;border-radius:2px}
+.mono{font-family:var(--font-mono);font-size:11px;line-height:1.75;}
+.lg{color:#34d399} .ly{color:#fbbf24} .lo{color:#fb923c}
+.lr{color:#f43f5e;font-weight:600} .li{color:#7dd3fc} .lw{color:#8492ab}
+.lb{color:#fb923c;font-weight:600;background:#231108;padding:1px 6px;border-radius:4px}
 /* ---- burn banner ---- */
-@keyframes bp{0%,100%{box-shadow:0 0 8px #ff4400,0 0 18px #ff6600;}
-              50%{box-shadow:0 0 18px #ff2200,0 0 36px #ff8800;}}
-.burn-banner{animation:bp .7s infinite;border-radius:6px;padding:7px 15px;
-  background:#1a0500;border:2px solid #ff4400;
-  font-family:'Share Tech Mono',monospace;margin-bottom:8px;}
-/* ---- pipeline ---- */
-.ps{background:#080820;border-left:3px solid #2244cc;
-  padding:3px 9px;margin:2px 0;border-radius:0 3px 3px 0;
-  font-family:'Share Tech Mono',monospace;font-size:10px;}
+@keyframes bp{0%,100%{box-shadow:0 0 0 1px rgba(244,63,94,.5),0 0 16px rgba(244,63,94,.25);}
+              50%{box-shadow:0 0 0 1px rgba(244,63,94,.8),0 0 28px rgba(244,63,94,.5);}}
+.burn-banner{animation:bp 1.4s ease-in-out infinite;border-radius:10px;padding:11px 18px;
+  background:linear-gradient(135deg,#1c0a10,#160810);border:1px solid #f43f5e;
+  font-family:var(--font-mono);font-size:13px;margin-bottom:10px;color:#ffd7de;}
+/* ---- pipeline trace ---- */
+.ps{background:#0e1524;border-left:3px solid #4d9fff;
+  padding:5px 11px;margin:3px 0;border-radius:0 5px 5px 0;
+  font-family:var(--font-mono);font-size:11px;}
 /* ---- mission story banner ---- */
-.story{border-radius:6px;padding:11px 16px;margin-bottom:8px;
-  font-size:14px;line-height:1.55;
-  background:#050a18;border:1px solid #12203f;color:#c8d8f0;}
-.story b{color:#00d4ff}
-.story .hl-r{color:#ff2244;font-weight:bold}
-.story .hl-o{color:#ff8c00;font-weight:bold}
-.story .hl-g{color:#00ff88;font-weight:bold}
+.story{border-radius:11px;padding:15px 20px;margin-bottom:12px;
+  font-size:15px;line-height:1.6;font-family:var(--font-ui);
+  background:linear-gradient(135deg,#111726,#0e1420);
+  border:1px solid #1e2740;border-left:3px solid #4d9fff;color:#dfe6f2;}
+.story b{color:#7dd3fc;font-weight:600}
+.story .hl-r{color:#f43f5e;font-weight:700}
+.story .hl-o{color:#fb923c;font-weight:700}
+.story .hl-g{color:#34d399;font-weight:700}
 /* ---- ACAS pipeline stepper ---- */
-.stepper{display:flex;gap:5px;margin-bottom:10px;align-items:stretch;}
-.step{flex:1;background:#060a18;border:1px solid #0d1830;border-radius:6px;
-  padding:7px 11px;min-width:0;}
-.step .st-n{font-family:'Share Tech Mono',monospace;font-size:8px;
-  letter-spacing:2px;color:#3a4a66;display:block;text-transform:uppercase}
-.step .st-t{font-family:'Share Tech Mono',monospace;font-size:10.5px;
-  color:#8fa8cc;display:block;margin-top:3px;line-height:1.45}
-.step-ok{border-color:#0a4d33}.step-ok .st-n{color:#00ff88}
-.step-hot{border-color:#ff2244;background:#170208;
-  box-shadow:0 0 10px rgba(255,34,68,.25)}
-.step-hot .st-n{color:#ff2244}
-.step-warn{border-color:#8a5200}.step-warn .st-n{color:#ff8c00}
+.stepper{display:flex;gap:8px;margin-bottom:14px;align-items:stretch;}
+.step{flex:1;background:#121826;border:1px solid #1e2740;border-radius:10px;
+  padding:11px 14px;min-width:0;position:relative;}
+.step .st-n{font-family:var(--font-ui);font-size:9px;font-weight:700;
+  letter-spacing:1px;color:#7382a0;display:block;text-transform:uppercase}
+.step .st-t{font-family:var(--font-ui);font-size:11.5px;
+  color:#c4d0e6;display:block;margin-top:5px;line-height:1.4}
+.step-ok{border-color:rgba(52,211,153,.4)}.step-ok .st-n{color:#34d399}
+.step-hot{border-color:#f43f5e;background:linear-gradient(135deg,#1c0a10,#141826);
+  box-shadow:0 0 16px rgba(244,63,94,.2)}
+.step-hot .st-n{color:#f43f5e}
+.step-warn{border-color:rgba(251,146,60,.45)}.step-warn .st-n{color:#fb923c}
 /* ---- outcome KPI tiles ---- */
-.kpi-row{display:flex;gap:6px;margin-bottom:10px}
-.kpi{flex:1;background:#07091a;border:1px solid #0d1830;border-radius:6px;
-  padding:9px 12px;text-align:center}
-.kpi .k-l{font-family:'Share Tech Mono',monospace;font-size:8px;
-  letter-spacing:2px;color:#3a4a66;text-transform:uppercase;display:block}
-.kpi .k-v{font-family:'Share Tech Mono',monospace;font-size:18px;
-  color:#00d4ff;display:block;margin-top:3px}
-.kpi .k-s{font-family:'Share Tech Mono',monospace;font-size:9px;
-  color:#5a6a86;display:block;margin-top:1px}
-.k-good{color:#00ff88 !important}.k-bad{color:#ff2244 !important}
+.kpi-row{display:flex;gap:8px;margin-bottom:14px}
+.kpi{flex:1;background:#121826;border:1px solid #1e2740;border-radius:10px;
+  padding:13px 15px;text-align:center}
+.kpi .k-l{font-family:var(--font-ui);font-size:9px;font-weight:600;
+  letter-spacing:1px;color:#7382a0;text-transform:uppercase;display:block}
+.kpi .k-v{font-family:var(--font-mono);font-size:22px;font-weight:600;
+  color:#7dd3fc;display:block;margin-top:5px;letter-spacing:-.5px}
+.kpi .k-s{font-family:var(--font-ui);font-size:10px;
+  color:#8492ab;display:block;margin-top:3px}
+.k-good{color:#34d399 !important}.k-bad{color:#f43f5e !important}
 </style>""", unsafe_allow_html=True)
 
 
@@ -215,7 +259,7 @@ SCENARIOS = [
      "miss_km":0.30,"tca_h":1.8,"rp":[0.18,-0.15,0.06],"rv":[-9.00,4.50,2.00],
      "stale":False,"tle_age":5.0},
 ]
-AC = {"GREEN":"#00ff88","YELLOW":"#ffd700","ORANGE":"#ff8c00","RED":"#ff2244"}
+AC = {"GREEN":"#34d399","YELLOW":"#fbbf24","ORANGE":"#fb923c","RED":"#f43f5e"}
 
 
 # ============================================================
@@ -442,10 +486,10 @@ dv_ss       = st.session_state.last_dv
 # ============================================================
 def mission_mode():
     if burn_active or overall==Alert.RED:
-        return "CRITICAL","#ff2244","rgba(255,34,68,.12)","#ff2244"
+        return "CRITICAL","#f43f5e","rgba(244,63,94,.10)","rgba(244,63,94,.5)"
     if overall in [Alert.ORANGE,Alert.YELLOW] or bat_now<30 or fuel_now<20:
-        return "SAFE MODE","#ffd700","rgba(255,215,0,.08)","#ffd700"
-    return "NOMINAL","#00ff88","rgba(0,255,136,.07)","#00ff88"
+        return "ELEVATED","#fbbf24","rgba(251,191,36,.08)","rgba(251,191,36,.45)"
+    return "NOMINAL","#34d399","rgba(52,211,153,.07)","rgba(52,211,153,.4)"
 
 mode_label, mode_col, mode_bg, mode_border = mission_mode()
 
@@ -511,11 +555,11 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '<div id="badge"></div>\n'
         '<div id="burnbadge">🔥 BURN IN PROGRESS</div>\n'
         '<div id="legend">'
-        '<span class="sw" style="background:#ffc840"></span>POWER HOUSE<br>'
-        '<span class="sw" style="background:#ffd700"></span>THREAT · YELLOW<br>'
-        '<span class="sw" style="background:#ff8c00"></span>THREAT · ORANGE<br>'
-        '<span class="sw" style="background:#ff2244"></span>THREAT · RED<br>'
-        '<span class="sw" style="background:#00ff44;border-radius:0;height:2px;vertical-align:2px"></span>POST-BURN PATH'
+        '<span class="sw" style="background:#ffc233"></span>Power House (satellite)<br>'
+        '<span class="sw" style="background:#fbbf24"></span>Threat · Watch<br>'
+        '<span class="sw" style="background:#fb923c"></span>Threat · Caution<br>'
+        '<span class="sw" style="background:#f43f5e"></span>Threat · Critical<br>'
+        '<span class="sw" style="background:#34d399;border-radius:0;height:2px;vertical-align:2px"></span>Post-burn trajectory'
         '</div>\n'
         f'<script>{THREE_JS_SRC}</script>\n'
         '<script>\n'
@@ -617,15 +661,15 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '\n'
         '// Satellite — GOLD, clearly visible, labeled\n'
         'const satG=new THREE.Group();\n'
-        'const coreMat=new THREE.MeshPhongMaterial({color:0xffc840,emissive:0x301800,specular:0xffe88a,shininess:100});\n'
+        'const coreMat=new THREE.MeshPhongMaterial({color:0xffc233,emissive:0x301800,specular:0xffe88a,shininess:100});\n'
         'const core=new THREE.Mesh(new THREE.SphereGeometry(.10,16,16),coreMat);\n'
         'satG.add(core);\n'
         'satG.add(new THREE.Mesh(new THREE.BoxGeometry(.22,.06,.06),new THREE.MeshPhongMaterial({color:0xc0ccd8,specular:0x5577aa,shininess:60})));\n'
         '[-1,1].forEach(s=>{const p=new THREE.Mesh(new THREE.BoxGeometry(.46,.004,.14),new THREE.MeshPhongMaterial({color:0x0a1f5c,emissive:0x04102e,specular:0x3355aa,shininess:80}));p.position.x=s*.34;satG.add(p);});\n'
-        'const glowMat=new THREE.MeshBasicMaterial({color:0xffc840,transparent:true,opacity:.14});\n'
+        'const glowMat=new THREE.MeshBasicMaterial({color:0xffc233,transparent:true,opacity:.14});\n'
         'satG.add(new THREE.Mesh(new THREE.SphereGeometry(.19,12,12),glowMat));\n'
         'scene.add(satG);\n'
-        'const satLabel=makeLabel("POWER HOUSE","#ffc840",1.0);\n'
+        'const satLabel=makeLabel("POWER HOUSE","#ffc233",1.0);\n'
         'scene.add(satLabel);\n'
         '\n'
         '// Fading orbit trail behind the satellite\n'
@@ -633,7 +677,7 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         'const trailPos=new Float32Array(TRAIL_N*3);\n'
         'const trailGeo=new THREE.BufferGeometry();\n'
         'trailGeo.setAttribute("position",new THREE.BufferAttribute(trailPos,3));\n'
-        'const trail=new THREE.Line(trailGeo,new THREE.LineBasicMaterial({color:0xffc840,transparent:true,opacity:.5}));\n'
+        'const trail=new THREE.Line(trailGeo,new THREE.LineBasicMaterial({color:0xffc233,transparent:true,opacity:.5}));\n'
         'scene.add(trail);\n'
         'let trailInit=false;\n'
         '\n'
@@ -702,15 +746,20 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '}\n'
         '\n'
         '// Debris objects — alert-coloured, labelled, RED ones get a pulsing ring\n'
-        'const AC3={GREEN:0x00ff88,YELLOW:0xffd700,ORANGE:0xff8c00,RED:0xff2244};\n'
-        'const ACH={GREEN:"#00ff88",YELLOW:"#ffd700",ORANGE:"#ff8c00",RED:"#ff2244"};\n'
+        'const AC3={GREEN:0x34d399,YELLOW:0xfbbf24,ORANGE:0xfb923c,RED:0xf43f5e};\n'
+        'const ACH={GREEN:"#34d399",YELLOW:"#fbbf24",ORANGE:"#fb923c",RED:"#f43f5e"};\n'
         'const debObjs=DEBRIS.map(d=>{\n'
         '  const col=AC3[d.a]||0xaaaaaa;\n'
         '  const mesh=new THREE.Mesh(new THREE.OctahedronGeometry(.085,0),new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:.7,flatShading:true}));\n'
         '  scene.add(mesh);\n'
+        '  // dashed approach line satellite↔debris\n'
         '  const lGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);\n'
-        '  const line=new THREE.Line(lGeo,new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.6}));\n'
+        '  const line=new THREE.Line(lGeo,new THREE.LineDashedMaterial({color:col,transparent:true,opacity:.55,dashSize:.12,gapSize:.08}));\n'
         '  scene.add(line);\n'
+        '  // a bright bead that slides ALONG the line toward the satellite → shows closing motion\n'
+        '  const bead=new THREE.Mesh(new THREE.SphereGeometry(.035,10,10),\n'
+        '    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.95}));\n'
+        '  scene.add(bead);\n'
         '  const label=makeLabel(d.n,ACH[d.a]||"#ccc",.66);\n'
         '  scene.add(label);\n'
         '  let ring=null;\n'
@@ -719,7 +768,7 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false}));\n'
         '    scene.add(ring);\n'
         '  }\n'
-        '  return{mesh,line,label,ring,rp:d.r,alert:d.a};\n'
+        '  return{mesh,line,bead,label,ring,rp:d.r,alert:d.a};\n'
         '});\n'
         '\n'
         '// Alert badge\n'
@@ -728,8 +777,8 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '  const ord={GREEN:0,YELLOW:1,ORANGE:2,RED:3};\n'
         '  const w=DEBRIS.reduce((a,b)=>ord[b.a]>ord[a.a]?b:a,DEBRIS[0]);\n'
         '  if(w.a==="GREEN")return;\n'
-        '  const cc={YELLOW:"#ffd700",ORANGE:"#ff8c00",RED:"#ff2244"};\n'
-        '  const bg={YELLOW:"#0f0d00",ORANGE:"#0f0500",RED:"#0f0005"};\n'
+        '  const cc={YELLOW:"#fbbf24",ORANGE:"#fb923c",RED:"#f43f5e"};\n'
+        '  const bg={YELLOW:"#1a1405",ORANGE:"#1a0e05",RED:"#1a0510"};\n'
         '  const el=document.getElementById("badge");\n'
         '  el.style.color=cc[w.a]||"#fff";el.style.borderColor=cc[w.a]||"#fff";el.style.background=bg[w.a]||"#000";\n'
         '  el.textContent="⚠ "+w.a+" — "+w.n;el.style.display="block";\n'
@@ -777,9 +826,9 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '    glowMat.color.setHex(0xff6600);\n'
         '    glowMat.opacity=.28+.12*Math.sin(tR*14);\n'
         '  }else{\n'
-        '    coreMat.color.setHex(0xffc840);\n'
+        '    coreMat.color.setHex(0xffc233);\n'
         '    coreMat.emissive.setHex(0x221200);\n'
-        '    glowMat.color.setHex(0xffc840);\n'
+        '    glowMat.color.setHex(0xffc233);\n'
         '    glowMat.opacity=.10+.03*Math.sin(tR*1.5);\n'
         '  }\n'
         '  // Velocity arrow (dim blue)\n'
@@ -799,9 +848,14 @@ def build_globe(sm_data, debris_list, burn_active, dv_vec, burn_pos, post_pts):
         '      d.ring.material.opacity=d.alert==="RED"?.5+.4*Math.abs(Math.sin(tR*5)):.35+.2*Math.abs(Math.sin(tR*2.5));\n'
         '    }\n'
         '    const lp=d.line.geometry.attributes.position;\n'
-        '    lp.setXYZ(0,satPos.x,satPos.y,satPos.z);\n'
-        '    lp.setXYZ(1,dPos.x,dPos.y,dPos.z);\n'
+        '    lp.setXYZ(0,dPos.x,dPos.y,dPos.z);\n'
+        '    lp.setXYZ(1,satPos.x,satPos.y,satPos.z);\n'
         '    lp.needsUpdate=true;\n'
+        '    d.line.computeLineDistances();\n'
+        '    // bead slides debris→satellite on a loop, conveying the closing approach\n'
+        '    const bt=(tR*(d.alert==="RED"?.55:.3))%1;\n'
+        '    d.bead.position.lerpVectors(dPos,satPos,bt);\n'
+        '    d.bead.material.opacity=.95*(1-bt*.7);\n'
         '  });\n'
         '  // Burn exhaust — fires OPPOSITE to ΔV (exhaust = -ΔV direction)\n'
         '  if(BURN&&dvDir3.length()>.001){\n'
@@ -891,11 +945,13 @@ with r3:
 if burn_active and np.linalg.norm(dv_ss)>0:
     bp=st.session_state.burn_pos
     st.markdown(
-        f'<div class="burn-banner">🔥 <b style="color:#ff4400">THRUSTERS FIRING</b>'
-        f' &nbsp;|&nbsp; <span style="color:#ff8800">ΔV = [{dv_ss[0]:.3f}, {dv_ss[1]:.3f}, {dv_ss[2]:.3f}] m/s'
-        f'  |ΔV|={np.linalg.norm(dv_ss):.3f} m/s</span>'
-        f' &nbsp;|&nbsp; <span style="color:#ffd700">Burn ECI = [{bp[0]:.1f}, {bp[1]:.1f}, {bp[2]:.1f}] km</span>'
-        f' &nbsp;|&nbsp; <span style="color:#aabbff">{"AUTONOMOUS" if not ground else "GND CONFIRMED"}</span>'
+        f'<div class="burn-banner">'
+        f'<b style="color:#f43f5e;letter-spacing:.8px">● THRUSTERS FIRING</b>'
+        f' &nbsp;&nbsp;<span style="color:#fca5b4">ΔV [{dv_ss[0]:.3f}, {dv_ss[1]:.3f}, {dv_ss[2]:.3f}] m/s'
+        f' · |ΔV| {np.linalg.norm(dv_ss):.3f} m/s</span>'
+        f' &nbsp;&nbsp;<span style="color:#8492ab">ECI [{bp[0]:.0f}, {bp[1]:.0f}, {bp[2]:.0f}] km</span>'
+        f' &nbsp;&nbsp;<span style="color:{"#fbbf24" if not ground else "#34d399"};font-weight:600">'
+        f'{"AUTONOMOUS" if not ground else "GROUND-CONFIRMED"}</span>'
         f'</div>', unsafe_allow_html=True)
 
 
@@ -949,7 +1005,7 @@ elif worst and worst['assessment'].alert in (Alert.RED, Alert.ORANGE):
              f'Decision: <b>{ACTION_WORDS.get(worst["action"], worst["action"])}</b>.')
 elif worst and worst['assessment'].alert == Alert.YELLOW:
     c_ = worst['conjunction']
-    story = (f'<span style="color:#ffd700">◉ {c_["object_name"]}</span> is being tracked '
+    story = (f'<span style="color:#fbbf24;font-weight:600">{c_["object_name"]}</span> is being tracked '
              f'(closest pass {c_["miss_km"]:.1f} km in {c_["tca_hours"]:.0f} h) — '
              f'below manoeuvre threshold. <b>Ground notified, monitoring every 60 s.</b>')
 else:
@@ -1052,7 +1108,7 @@ with crp:
         dv2 = dv_ss; dvm = np.linalg.norm(dv2)
         dv_unit = dv2/(dvm+1e-10)
 
-        st.markdown('<div class="sec">🔥 MODEL BURN OUTPUT</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec">Model Burn Output</div>', unsafe_allow_html=True)
         st.markdown(
             f'<div class="rcard" style="border-color:#ff4400">'
             f'<div class="trow"><span class="tkey">Alert Level</span>'
@@ -1082,7 +1138,7 @@ with crp:
 
         # Pipeline trace for the latest result
         if lr:
-            with st.expander("🔬 Pipeline Trace", expanded=False):
+            with st.expander("Pipeline trace — feature extraction → Pc → decision", expanded=False):
                 html_t='<div class="mono">'
                 for pe in lr['log']:
                     html_t+=(f'<div class="ps"><span style="color:#2244cc">S{pe["s"]}</span> '
@@ -1095,12 +1151,15 @@ with crp:
         for r in all_results:
             c=r['conjunction']; a=r['assessment']
             BC=AC[a.alert.value]
-            IC={"GREEN":"✅","YELLOW":"⚠️","ORANGE":"🟠","RED":"🔴"}[a.alert.value]
             mc2="tv-r" if c['miss_km']<1 else "tv-o" if c['miss_km']<2 else "tval"
             st.markdown(
-                f'<div class="rcard" style="border-color:{BC}">'
-                f'<b style="color:{BC};font-family:Share Tech Mono,monospace">'
-                f'{IC} {c["object_name"]}</b>'
+                f'<div class="rcard" style="border-left:3px solid {BC}">'
+                f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+                f'<span style="width:9px;height:9px;border-radius:50%;background:{BC};'
+                f'box-shadow:0 0 7px {BC};display:inline-block"></span>'
+                f'<b style="color:{BC};font-size:13px">{c["object_name"]}</b>'
+                f'<span style="margin-left:auto;font-size:10px;font-weight:700;'
+                f'letter-spacing:.5px;color:{BC}">{a.alert.value}</span></div>'
                 f'<br><div class="trow"><span class="tkey">Miss Distance</span>'
                 f'<span class="tval {mc2}">{c["miss_km"]:.3f} km</span></div>'
                 f'<div class="trow"><span class="tkey">TCA</span>'
@@ -1132,11 +1191,11 @@ with crp:
         add_log(f"📥 {sc['name']} | {sc['alert']} | miss={sc['miss_km']:.2f}km TCA={sc['tca_h']:.1f}h","lw")
         st.session_state.cycle+=1
 
-    st.markdown('<div class="sec">🎬 Demo — inject a simulated threat</div>',
+    st.markdown('<div class="sec">Demo · Inject a Simulated Threat</div>',
                 unsafe_allow_html=True)
     st.caption("Each button feeds one realistic conjunction into the live pipeline "
                "above: detection → AI prediction → risk assessment → decision → burn.")
-    if st.button("▶  RUN FULL DEMO — critical debris → autonomous burn",
+    if st.button("▶  Run Full Demo — Critical Debris → Autonomous Burn",
                  type="primary", use_container_width=True):
         red_sc = next((s for s in SCENARIOS if s['alert']=="RED"), SCENARIOS[-1])
         _inject_scenario(red_sc)
@@ -1150,24 +1209,26 @@ with crp:
             miss_txt=(f'{sc["miss_km"]*1000:.0f} m' if sc["miss_km"]<1
                       else f'{sc["miss_km"]:.1f} km')
             st.markdown(
-                f'<div class="sc-card">'
-                f'<span style="color:{col_a};font-family:Share Tech Mono,monospace;'
-                f'font-size:10px;font-weight:bold">{sc["alert"]}</span>'
-                f'&nbsp;<span style="color:#c8d8f0;font-family:Share Tech Mono,monospace;'
-                f'font-size:11px">{sc["name"]}</span>'
-                f'<br><span style="color:#7a8aa6;font-size:10.5px">'
+                f'<div class="sc-card" style="border-left:3px solid {col_a}">'
+                f'<div style="display:flex;align-items:center;gap:7px">'
+                f'<span style="width:8px;height:8px;border-radius:50%;background:{col_a};'
+                f'display:inline-block"></span>'
+                f'<span style="color:#eaf1ff;font-weight:600;font-size:12.5px">{sc["name"]}</span>'
+                f'<span style="margin-left:auto;color:{col_a};font-size:9px;'
+                f'font-weight:700;letter-spacing:.5px">{sc["alert"]}</span></div>'
+                f'<div style="color:#9aa7c0;font-size:11px;margin-top:4px">'
                 f'Passes within <b style="color:{col_a}">{miss_txt}</b> in {sc["tca_h"]:.1f} h, '
                 f'closing at {spd_sc:.1f} km/s'
-                f'{" · stale tracking data" if sc["stale"] else ""}</span>'
-                f'<br><span style="color:#44526b;font-size:9.5px">{sc["desc"]}</span>'
+                f'{" · stale tracking data" if sc["stale"] else ""}</div>'
+                f'<div style="color:#5c6a85;font-size:10px;margin-top:2px">{sc["desc"]}</div>'
                 f'</div>', unsafe_allow_html=True)
         with c2:
             if st.button("Inject", key=f"sc_{sc['norad']}", use_container_width=True):
                 _inject_scenario(sc)
                 st.rerun()
 
-    # §2.4 — ACAS LOG
-    st.markdown('<div class="sec">▶ ACAS Log</div>', unsafe_allow_html=True)
+    # ACAS event log
+    st.markdown('<div class="sec">Event Log</div>', unsafe_allow_html=True)
     if not st.session_state.log:
         st.caption("No log entries yet.")
     else:
@@ -1191,19 +1252,36 @@ with crp:
 # ============================================================
 with st.sidebar:
     st.markdown(
-        '<div style="text-align:center;padding:6px 0">'
-        '<span style="font-size:24px">🛰️</span><br>'
-        '<b style="font-size:14px;color:#00d4ff;letter-spacing:3px">POWER HOUSE</b><br>'
-        '<span style="font-size:9px;color:#3a4a66;letter-spacing:2px">IN-SPACe · ACAS DASHBOARD</span>'
+        '<div style="padding:2px 0 10px">'
+        '<div style="font-size:19px;font-weight:700;color:#eaf1ff;letter-spacing:.5px">'
+        'POWER&nbsp;HOUSE</div>'
+        '<div style="font-size:10px;font-weight:600;color:#6b7a99;letter-spacing:1.5px;'
+        'text-transform:uppercase;margin-top:2px">IN-SPACe · ACAS</div>'
+        '<div style="font-size:11px;color:#8492ab;margin-top:6px">'
+        'Autonomous Collision Avoidance System</div>'
         '</div>', unsafe_allow_html=True)
-    st.divider()
 
-    # Model status
-    if M['onnx_ok']: st.success(M['onnx_msg'], icon="✅")
-    else:            st.warning(M['onnx_msg'],  icon="⚠️")
-    if M['rl_ok']:   st.success(M['rl_msg'],    icon="✅")
-    else:            st.warning(M['rl_msg'],     icon="⚠️")
-    st.divider()
+    # Onboard model status — compact professional readout
+    def _status_chip(ok, label, detail):
+        c   = "#34d399" if ok else "#fb923c"
+        dot = "●" if ok else "▲"
+        state = "ONLINE" if ok else "FALLBACK"
+        return (f'<div style="display:flex;align-items:center;gap:9px;'
+                f'background:#111726;border:1px solid #1e2740;border-radius:8px;'
+                f'padding:8px 12px;margin-bottom:6px">'
+                f'<span style="color:{c};font-size:11px">{dot}</span>'
+                f'<div style="flex:1"><div style="font-size:11px;font-weight:600;'
+                f'color:#c4d0e6">{label}</div>'
+                f'<div style="font-size:9.5px;color:#6b7a99">{detail}</div></div>'
+                f'<span style="font-size:9px;font-weight:700;letter-spacing:.5px;'
+                f'color:{c}">{state}</span></div>')
+    st.markdown('<div class="sec">Onboard AI Stack</div>', unsafe_allow_html=True)
+    st.markdown(
+        _status_chip(M['onnx_ok'], "LightGBM Pc engine",
+                     "collision-probability model" if M['onnx_ok'] else "physics fallback active") +
+        _status_chip(M['rl_ok'], "RL manoeuvre policy",
+                     "PPO agent loaded" if M['rl_ok'] else "geometric fallback active"),
+        unsafe_allow_html=True)
 
     # §1 — Live ECI position & velocity (fragment, 3s update)
     # Only this block re-runs every 3 seconds — everything else is stable
@@ -1219,11 +1297,11 @@ with st.sidebar:
         ecl2=sm2['environment']['in_eclipse']
         gnd2=sm2['communications']['ground_contact']
 
-        st.markdown('<div class="sec">§1 — Satellite ECI State</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec">Satellite State · ECI</div>', unsafe_allow_html=True)
 
         st.markdown(
-            f'<div style="font-family:Share Tech Mono,monospace;font-size:9px;'
-            f'color:#3a4a66;letter-spacing:1px;margin-bottom:3px">POSITION (km)</div>'
+            f'<div style="font-family:var(--font-ui);font-size:9px;'
+            f'color:#7382a0;letter-spacing:.8px;font-weight:600;margin-bottom:4px">POSITION (km)</div>'
             f'<div class="vg">'
             f'<div class="vc"><span class="va">X</span><span class="vn">{e2["pos_x_km"]:.1f}</span></div>'
             f'<div class="vc"><span class="va">Y</span><span class="vn">{e2["pos_y_km"]:.1f}</span></div>'
@@ -1231,8 +1309,8 @@ with st.sidebar:
             f'</div>', unsafe_allow_html=True)
 
         st.markdown(
-            f'<div style="font-family:Share Tech Mono,monospace;font-size:9px;'
-            f'color:#3a4a66;letter-spacing:1px;margin-bottom:3px">VELOCITY (km/s)</div>'
+            f'<div style="font-family:var(--font-ui);font-size:9px;'
+            f'color:#7382a0;letter-spacing:.8px;font-weight:600;margin-bottom:4px">VELOCITY (km/s)</div>'
             f'<div class="vg">'
             f'<div class="vc"><span class="va">Vx</span><span class="vn">{e2["vel_x_kms"]:.4f}</span></div>'
             f'<div class="vc"><span class="va">Vy</span><span class="vn">{e2["vel_y_kms"]:.4f}</span></div>'
@@ -1240,7 +1318,7 @@ with st.sidebar:
             f'</div>', unsafe_allow_html=True)
 
         # Fuel gauge
-        fc="#ff2244" if fuel2<20 else "#ffd700" if fuel2<40 else "#00ff88"
+        fc="#f43f5e" if fuel2<20 else "#fbbf24" if fuel2<40 else "#34d399"
         st.markdown(
             f'<div class="g-wrap"><div class="g-head">'
             f'<span class="g-lbl">FUEL</span><span class="g-val">{fuel2:.2f}%</span>'
@@ -1249,7 +1327,7 @@ with st.sidebar:
             f'</div></div>', unsafe_allow_html=True)
 
         # Battery gauge
-        bc2="#ff2244" if bat2<25 else "#ffd700" if bat2<50 else "#00d4ff"
+        bc2="#f43f5e" if bat2<25 else "#fbbf24" if bat2<50 else "#38bdf8"
         st.markdown(
             f'<div class="g-wrap"><div class="g-head">'
             f'<span class="g-lbl">BATTERY</span><span class="g-val">{bat2:.1f}%</span>'
@@ -1261,16 +1339,16 @@ with st.sidebar:
         st.markdown(
             f'<div class="pr">'
             f'<span class="pill {"p-on" if gnd2 else "p-off"}">'
-            f'{"GND ✓" if gnd2 else "BLACKOUT"}</span>'
+            f'{"GROUND LINK" if gnd2 else "NO CONTACT"}</span>'
             f'<span class="pill {"p-off" if ecl2 else "p-on"}">'
-            f'{"🌑 ECLIPSE" if ecl2 else "☀️ SUNLIT"}</span>'
+            f'{"ECLIPSE" if ecl2 else "SUNLIT"}</span>'
             f'</div>', unsafe_allow_html=True)
 
     sidebar_live()
     st.divider()
 
-    # §2 — Custom threat injection form
-    st.markdown('<div class="sec">§2 — Custom Threat Injection</div>', unsafe_allow_html=True)
+    # Custom threat injection form
+    st.markdown('<div class="sec">Custom Threat Injection</div>', unsafe_allow_html=True)
     with st.form("threat_form", clear_on_submit=False):
         name = st.text_input("Object Name", "CUSTOM DEB-1")
         nid  = st.text_input("NORAD ID",    "99001")
