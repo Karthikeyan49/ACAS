@@ -32,7 +32,17 @@ lgbm:
   risk_score_watch:      -8.0
 
 # Analytic (Foster 2D) collision probability — combined hard-body radius.
+# Used as the conservative FALLBACK when the object's RCS size class is unknown.
 hard_body_radius_m: 20.0
+
+# Dynamic per-object hard-body radius. When the Space-Track catalog record
+# carries an RCS_SIZE class (SMALL/MEDIUM/LARGE), the combined radius becomes
+# own_radius_m + the mapped object radius instead of the fixed fallback above.
+hard_body:
+  own_radius_m:        2.0    # our satellite's physical radius (m)
+  rcs_small_radius_m:  0.5    # RCS_SIZE = SMALL   (< 0.1 m²)
+  rcs_medium_radius_m: 1.5    # RCS_SIZE = MEDIUM  (0.1–1 m²)
+  rcs_large_radius_m:  5.0    # RCS_SIZE = LARGE   (> 1 m²)
 
 # Decision gate — autonomy governance before a burn is executed.
 decision_gate:

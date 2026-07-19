@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACAS · Mission Console</title>
+<style>
+  :root{
+    --bg:#070b12; --panel:#0e1420; --panel2:#111a2a; --line:#1d2940;
+    --txt:#d7e0ee; --dim:#7d8ba3; --faint:#4a5670;
+    --accent:#4d9fff; --green:#2fd08c; --yellow:#f5c542; --orange:#ff8b3d; --red:#ff4d5e;
+    --mono:'SF Mono',Consolas,'Cascadia Mono',Menlo,monospace;
+    --sans:-apple-system,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font:13px/1.45 var(--sans);overflow-x:hidden}
+  ::selection{background:#26436e}
+
+  /* ── header ─────────────────────────────────────── */
+  header{display:flex;align-items:center;gap:18px;padding:10px 20px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0c1220,#0a0f19)}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand b{font-size:16px;letter-spacing:.14em}
+  .brand span{color:var(--dim);font-size:11px;letter-spacing:.08em}
+  .hchips{display:flex;gap:8px;margin-left:auto;align-items:center}
+  .chip{font:11px var(--mono);padding:3px 10px;border:1px solid var(--line);
+    border-radius:3px;background:var(--panel);color:var(--dim);white-space:nowrap}
+  .chip b{color:var(--txt);font-weight:600}
+  .chip.ok b{color:var(--green)}
+  .chip.state b{color:var(--accent)}
+  #utc{font-variant-numeric:tabular-nums}
+
+  /* ── layout ─────────────────────────────────────── */
+  .grid{display:grid;grid-template-columns:290px 1fr 330px;gap:12px;padding:12px 16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .phead{display:flex;align-items:center;justify-content:space-between;
+    padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .phead h2{font-size:10px;font-weight:600;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+  .phead .tag{font:10px var(--mono);color:var(--faint)}
+  .pbody{padding:12px}
+
+  /* ── spacecraft panel ───────────────────────────── */
+  .kv{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0}
+  .kv label{color:var(--dim);font-size:11px;letter-spacing:.05em}
+  .kv output{font:12.5px var(--mono);font-variant-numeric:tabular-nums}
+  .bar{height:4px;background:#182238;border-radius:2px;margin:2px 0 8px}
+  .bar i{display:block;height:100%;border-radius:2px;background:var(--accent);
+    transition:width .8s cubic-bezier(.4,0,.2,1)}
+  .bar.fuel i{background:linear-gradient(90deg,#2fd08c,#59e0a8)}
+  .bar.batt i{background:linear-gradient(90deg,#4d9fff,#7db8ff)}
+  .pill{display:inline-block;font:10px var(--mono);padding:2px 8px;border-radius:3px;
+    border:1px solid var(--line);color:var(--dim)}
+  .pill.on{color:var(--green);border-color:#1d4436}
+  .pill.off{color:var(--red);border-color:#4a2230}
+  .divider{border-top:1px solid var(--line);margin:10px -12px;}
+
+  /* ── canvas / scene ─────────────────────────────── */
+  .scene{position:relative}
+  canvas{display:block;width:100%;height:460px}
+  .scene .overlay{position:absolute;left:12px;top:10px;font:10.5px var(--mono);
+    color:var(--dim);line-height:1.7;pointer-events:none}
+  .scene .overlay b{color:var(--txt)}
+  .legend{position:absolute;right:12px;top:10px;font:10px var(--mono);color:var(--faint);
+    text-align:right;line-height:1.8;pointer-events:none}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px;vertical-align:-1px}
+  .banner{position:absolute;left:0;right:0;bottom:0;padding:8px 14px;
+    font:11px var(--mono);letter-spacing:.04em;color:var(--dim);
+    background:linear-gradient(0deg,rgba(7,11,18,.92),rgba(7,11,18,0));pointer-events:none}
+  .banner b{color:var(--txt)}
+
+  /* ── threat board ───────────────────────────────── */
+  .threat{border:1px solid var(--line);border-radius:5px;margin-bottom:10px;
+    background:var(--panel2);transition:border-color .4s}
+  .threat.RED{border-color:#5c2430;box-shadow:0 0 0 1px #5c2430, 0 0 18px -6px rgba(255,77,94,.35)}
+  .threat.ORANGE{border-color:#5c3d24}
+  .threat.YELLOW{border-color:#544a1e}
+  .thead{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line)}
+  .thead .name{font:12px var(--mono);font-weight:600}
+  .thead .sub{color:var(--faint);font:10px var(--mono)}
+  .band{margin-left:auto;font:10px var(--mono);font-weight:700;padding:2px 8px;border-radius:3px}
+  .band.GREEN{background:#0e2b20;color:var(--green)}
+  .band.YELLOW{background:#2e2910;color:var(--yellow)}
+  .band.ORANGE{background:#33200f;color:var(--orange)}
+  .band.RED{background:#38121a;color:var(--red);animation:bpulse 1.1s ease-in-out infinite}
+  @keyframes bpulse{50%{box-shadow:0 0 10px -2px rgba(255,77,94,.7)}}
+  .tgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line)}
+  .tcell{background:var(--panel2);padding:6px 10px}
+  .tcell label{display:block;font-size:9px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+  .tcell output{font:12px var(--mono);font-variant-numeric:tabular-nums}
+  .pcrow{padding:7px 10px;border-top:1px solid var(--line);font:10.5px var(--mono);color:var(--dim);
+    display:flex;gap:12px;flex-wrap:wrap}
+  .pcrow b{color:var(--txt)}
+  .odds{padding:6px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+  .odds b{color:var(--txt)}
+
+  /* ── stepper ────────────────────────────────────── */
+  .stepper{display:flex;gap:0;padding:10px 16px 2px}
+  .step{flex:1;text-align:center;position:relative;padding-bottom:12px}
+  .step:not(:last-child):after{content:'';position:absolute;top:9px;left:calc(50% + 14px);
+    right:calc(-50% + 14px);height:1px;background:var(--line)}
+  .step .dot{width:18px;height:18px;border-radius:50%;margin:0 auto 5px;
+    border:1px solid var(--line);background:var(--panel2);
+    display:flex;align-items:center;justify-content:center;
+    font:9px var(--mono);color:var(--faint);transition:all .35s}
+  .step label{font-size:9.5px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase}
+  .step.done .dot{border-color:#1d4436;color:var(--green)}
+  .step.live .dot{border-color:var(--accent);color:var(--accent);
+    box-shadow:0 0 0 3px rgba(77,159,255,.15);animation:spulse 1.4s ease-in-out infinite}
+  .step.live label{color:var(--accent)}
+  .step.done label{color:var(--dim)}
+  @keyframes spulse{50%{box-shadow:0 0 0 6px rgba(77,159,255,.07)}}
+
+  /* ── bottom row ─────────────────────────────────── */
+  .bottom{display:grid;grid-template-columns:1fr 380px;gap:12px;padding:0 16px 16px}
+  .log{font:11px var(--mono);height:190px;overflow-y:auto;padding:10px 12px}
+  .log p{padding:1.5px 0;color:var(--dim);white-space:pre-wrap}
+  .log p b{font-weight:600}
+  .log .t{color:var(--faint)}
+  .log .SCAN b{color:var(--accent)} .log .PC b{color:#9d7dff}
+  .log .RISK b{color:var(--yellow)} .log .FSM b{color:#4dd8e8}
+  .log .BUS b{color:var(--orange)} .log .ACK b{color:var(--green)}
+  .log .ALRT b{color:var(--red)}
+  .buspanel .pbody{font:11px var(--mono)}
+  .jsonbox{background:#0a101c;border:1px solid var(--line);border-radius:4px;
+    padding:8px 10px;margin:6px 0;color:var(--dim);white-space:pre;overflow-x:auto;
+    font-size:10.5px;line-height:1.55}
+  .jsonbox .k{color:#6fa8e8}.jsonbox .v{color:#d7e0ee}.jsonbox .ok{color:var(--green)}
+  .buslabel{font-size:9px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
+  .veto{display:none;align-items:center;gap:10px;padding:8px 10px;margin-bottom:8px;
+    border:1px solid #544a1e;border-radius:4px;background:#171507}
+  .veto.show{display:flex}
+  .veto svg{flex:none}
+  .veto .vt{font:11px var(--mono);color:var(--yellow)}
+  .veto .vs{font-size:10px;color:var(--dim)}
+  footer{padding:6px 20px 14px;color:var(--faint);font-size:10px;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>ACAS</b><span>AUTONOMOUS COLLISION AVOIDANCE · MISSION CONSOLE</span></div>
+  <div class="hchips">
+    <span class="chip ok">ENGINE <b id="engine">LGBM_ACTIVE · reg iter 4527 · clf 0.650</b></span>
+    <span class="chip state">FSM <b id="fsmchip">NOMINAL</b></span>
+    <span class="chip">LOOP <b id="loopchip">60 s</b></span>
+    <span class="chip"><b id="utc">--:--:--</b> UTC</span>
+  </div>
+</header>
+
+<div class="stepper" id="stepper">
+  <div class="step" data-s="1"><div class="dot">1</div><label>Sense</label></div>
+  <div class="step" data-s="2"><div class="dot">2</div><label>Predict</label></div>
+  <div class="step" data-s="3"><div class="dot">3</div><label>Score</label></div>
+  <div class="step" data-s="4"><div class="dot">4</div><label>Decide</label></div>
+  <div class="step" data-s="5"><div class="dot">5</div><label>Act</label></div>
+  <div class="step" data-s="6"><div class="dot">6</div><label>Verify</label></div>
+</div>
+
+<div class="grid">
+
+  <!-- ══ LEFT: spacecraft ══ -->
+  <div class="panel">
+    <div class="phead"><h2>Spacecraft</h2><span class="tag">EOS-DEMO-01 · NORAD 99901</span></div>
+    <div class="pbody">
+      <div class="kv"><label>Propellant</label><output id="fuel">87.4 %</output></div>
+      <div class="bar fuel"><i id="fuelbar" style="width:87.4%"></i></div>
+      <div class="kv"><label>Battery</label><output id="batt">91.0 %</output></div>
+      <div class="bar batt"><i id="battbar" style="width:91%"></i></div>
+      <div class="kv"><label>Altitude</label><output id="alt">550.2 km</output></div>
+      <div class="kv"><label>Altitude floor margin</label><output id="margin">250 km</output></div>
+      <div class="kv"><label>Ground link</label><output><span class="pill on" id="gc">CONTACT</span></output></div>
+      <div class="kv"><label>Mission phase</label><output id="phase">critical</output></div>
+      <div class="divider"></div>
+      <div class="kv"><label>Catalog objects</label><output id="cat">200</output></div>
+      <div class="kv"><label>TLE refresh</label><output>every 90 min</output></div>
+      <div class="kv"><label>Screen volume</label><output>5.0 km</output></div>
+      <div class="divider"></div>
+      <div class="buslabel" style="margin-bottom:4px">Limitations active</div>
+      <div id="limits" style="font:10.5px var(--mono);color:var(--dim);line-height:1.8">— none —</div>
+    </div>
+  </div>
+
+  <!-- ══ CENTER: scene ══ -->
+  <div class="panel scene">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="ov">
+      <b>ORBIT VIEW</b> · ECI projection<br>
+      <span id="ovinfo">scanning catalog…</span>
+    </div>
+    <div class="legend">
+      spacecraft<i style="background:#4d9fff"></i><br>
+      threat object<i style="background:#ff4d5e"></i><br>
+      predicted paths<i style="background:#39496b"></i><br>
+      closest approach<i style="background:#f5c542"></i>
+    </div>
+    <div class="banner" id="banner"><b>NOMINAL</b> — routine surveillance. 200 catalog objects screened each 60-second cycle.</div>
+  </div>
+
+  <!-- ══ RIGHT: threat board ══ -->
+  <div class="panel">
+    <div class="phead"><h2>Conjunction Board</h2><span class="tag" id="tcount">1 tracked</span></div>
+    <div class="pbody" id="threats">
+
+      <div class="veto" id="veto">
+        <svg width="34" height="34" viewBox="0 0 34 34">
+          <circle cx="17" cy="17" r="14" fill="none" stroke="#2e2910" stroke-width="3"/>
+          <circle id="vetoring" cx="17" cy="17" r="14" fill="none" stroke="#f5c542" stroke-width="3"
+            stroke-dasharray="87.96" stroke-dashoffset="0" transform="rotate(-90 17 17)"
+            stroke-linecap="round"/>
+        </svg>
+        <div><div class="vt">GROUND VETO WINDOW <span id="vetot">300</span> s</div>
+        <div class="vs">silence = consent · veto aborts burn · window 300 s (compressed for demo)</div></div>
+      </div>
+
+      <div class="threat" id="t1">
+        <div class="thead">
+          <span class="name">COSMOS 2251 DEB</span>
+          <span class="sub">NORAD 34428 · DEBRIS · RCS MEDIUM</span>
+          <span class="band GREEN" id="t1band">GREEN</span>
+        </div>
+        <div class="tgrid">
+          <div class="tcell"><label>Miss dist</label><output id="t1miss">4.92 km</output></div>
+          <div class="tcell"><label>TCA</label><output id="t1tca">T−6.2 h</output></div>
+          <div class="tcell"><label>Rel speed</label><output id="t1spd">14.1 km/s</output></div>
+          <div class="tcell"><label>Raw Pc</label><output id="t1raw">2.1e−7</output></div>
+          <div class="tcell"><label>Adjusted Pc</label><output id="t1adj">2.1e−7</output></div>
+          <div class="tcell"><label>HBR</label><output>3.5 m</output></div>
+        </div>
+        <div class="pcrow">
+          <span>ml <b id="t1ml">1.4e−7</b></span>
+          <span>analytic <b id="t1an">2.1e−7</b></span>
+          <span>source <b id="t1src">analytic</b></span>
+          <span>TLE age <b id="t1age">30 h</b></span>
+        </div>
+        <div class="odds" id="t1odds">≈ 1-in-4,800,000 odds — routine monitoring.</div>
+      </div>
+
+      <div class="threat" id="t2">
+        <div class="thead">
+          <span class="name">SL-16 R/B</span>
+          <span class="sub">NORAD 22285 · ROCKET BODY · RCS LARGE</span>
+          <span class="band GREEN">GREEN</span>
+        </div>
+        <div class="tgrid">
+          <div class="tcell"><label>Miss dist</label><output>4.31 km</output></div>
+          <div class="tcell"><label>TCA</label><output>T−17.8 h</output></div>
+          <div class="tcell"><label>Rel speed</label><output>9.6 km/s</output></div>
+          <div class="tcell"><label>Raw Pc</label><output>8.8e−8</output></div>
+          <div class="tcell"><label>Adjusted Pc</label><output>8.8e−8</output></div>
+          <div class="tcell"><label>HBR</label><output>7.0 m</output></div>
+        </div>
+        <div class="odds">≈ 1-in-11,000,000 odds — no action.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOTTOM ══ -->
+<div class="bottom">
+  <div class="panel">
+    <div class="phead"><h2>Decision Log</h2><span class="tag">controller · 60 s cycle</span></div>
+    <div class="log" id="log"></div>
+  </div>
+  <div class="panel buspanel">
+    <div class="phead"><h2>Command Bus · HIL</h2><span class="tag">burn_command.json ⇄ burn_ack.json</span></div>
+    <div class="pbody">
+      <div class="buslabel">BurnCommand → spacecraft</div>
+      <div class="jsonbox" id="cmdbox">— no outstanding command —</div>
+      <div class="buslabel">BurnAck ← spacecraft</div>
+      <div class="jsonbox" id="ackbox">— awaiting —</div>
+    </div>
+  </div>
+</div>
+
+<footer>ACAS v2.1 · demo telemetry replays a scripted conjunction end-to-end (veto window compressed 300 s → 8 s) · all fields mirror the live pipeline schema</footer>
+
+<script>
+/* ═══════════════════ scripted scenario ═══════════════════
+   A 46-second loop that drives every panel through the real
+   pipeline sequence with the real field semantics.          */
+const $=id=>document.getElementById(id);
+const fmt=(x,d=2)=>x.toFixed(d);
+const sci=x=>{if(x<=0)return'0';const e=Math.floor(Math.log10(x));const m=x/10**e;
+  return fmt(m,1)+'e'+(e<0?'−':'+')+String(Math.abs(e))};
+const odds=p=>p<=0?'—':'1-in-'+Math.round(1/p).toLocaleString('en-US');
+
+const T={ // keyframe times (s)
+  detect:6, predict:8, score:10, red:12, veto:14, vetoEnd:22,
+  exec:22, burnEnd:25.5, ack:26.5, verify:29, recover:33, nominal:36, loop:46 };
+
+let t0=performance.now();
+const S={ // live state
+  fuel:87.4, miss:0.82, raw:2.1e-7, adj:2.1e-7, ml:1.4e-7, an:2.1e-7,
+  band:'GREEN', fsm:'NOMINAL', step:1, burnP:0, postMiss:0.82, dv:1.42 };
+
+const LOG=$('log');
+let logged=new Set();
+function log(t,tag,msg){const k=tag+msg;if(logged.has(k))return;logged.add(k);
+  const p=document.createElement('p');p.className=tag;
+  p.innerHTML=`<span class="t">${ts()}</span> <b>[${tag}]</b> ${msg}`;
+  LOG.appendChild(p);LOG.scrollTop=LOG.scrollHeight;}
+function ts(){const d=new Date();return d.toISOString().substr(11,8)}
+
+function setStep(n){S.step=n;document.querySelectorAll('.step').forEach(el=>{
+  const s=+el.dataset.s;el.className='step'+(s<n?' done':s===n?' live':'')})}
+function setBand(b){S.band=b;const el=$('t1band');el.textContent=b;el.className='band '+b;
+  $('t1').className='threat '+(b==='GREEN'?'':b)}
+function setFSM(st){S.fsm=st;$('fsmchip').textContent=st}
+function banner(html){$('banner').innerHTML=html}
+
+function tick(){
+  const now=(performance.now()-t0)/1000;
+  const t=now%T.loop;
+  if(now-t>0&&t<0.05){logged=new Set();LOG.innerHTML='';resetState();}
+  scenario(t); draw(t); $('utc').textContent=ts();
+  requestAnimationFrame(tick);
+}
+function resetState(){Object.assign(S,{fuel:87.4,miss:0.82,raw:2.1e-7,adj:2.1e-7,
+  ml:1.4e-7,an:2.1e-7,band:'GREEN',fsm:'NOMINAL',step:1,burnP:0,postMiss:0.82});
+  $('cmdbox').textContent='— no outstanding command —';
+  $('ackbox').textContent='— awaiting —';$('veto').className='veto';
+  $('limits').textContent='— none —';}
+
+function scenario(t){
+  // ── phase 0: scan ──
+  if(t<T.detect){setStep(1);setFSM('NOMINAL');setBand('GREEN');
+    $('ovinfo').textContent='propagating 200 objects · SGP4 · 24 h × 1 min';
+    banner('<b>NOMINAL</b> — routine surveillance. 200 catalog objects screened each 60-second cycle.');
+    $('t1miss').textContent='4.92 km';$('t1raw').textContent='2.1e−7';
+    $('t1adj').textContent='2.1e−7';$('t1odds').textContent='≈ 1-in-4,800,000 odds — routine monitoring.';
+    log(t,'SCAN','Satellite state | Fuel=87.4% | Batt=91.0% | Alt=550 km | Ground=YES');
+    if(t>2)log(t,'SCAN','trajectory 1,440 pts propagated · catalog scan running');
+  }
+  // ── phase 1: detection ──
+  else if(t<T.predict){setStep(1);
+    $('t1miss').textContent='0.82 km';
+    $('ovinfo').textContent='conjunction: COSMOS 2251 DEB · TCA T−6.2 h';
+    banner('<b>STEP 1 · SENSE</b> — refined solution: miss distance 0.82 km at 14.1 km/s. Screening volume 5 km.');
+    log(t,'SCAN','1 conjunction inside 5 km screen — COSMOS 2251 DEB, miss 0.82 km, TCA −6.2 h');
+  }
+  // ── phase 2: Pc ──
+  else if(t<T.score){setStep(2);
+    S.ml=3.1e-6;S.an=3.8e-4;S.raw=3.2e-4;
+    $('t1ml').textContent='3.1e−6';$('t1an').textContent='3.8e−4';$('t1src').textContent='analytic';
+    $('t1raw').textContent='3.2e−4';
+    banner('<b>STEP 2 · PREDICT</b> — LightGBM 3.1e−6 vs Foster-2D 3.8e−4 → arbiter takes max · calibrated Pc 3.2e−4. HBR 3.5 m (RCS MEDIUM).');
+    log(t,'PC','ml=3.1e-6 analytic=3.8e-4 → arbiter=analytic (disagreement>2 decades — flagged)');
+    log(t,'PC','isotonic calibration applied → raw_pc=3.2e-4 · HBR dynamic 3.5 m (MEDIUM)');
+  }
+  // ── phase 3: risk score ──
+  else if(t<T.red){setStep(3);
+    S.adj=1.1e-3;$('t1adj').textContent='1.1e−3';
+    $('t1odds').textContent='≈ '+ '1-in-910 odds this pass — above the 1-in-1,000 action threshold.';
+    $('limits').innerHTML='TLE 30 h old → Pc ×2.3<br>critical phase → Pc ×1.5';
+    banner('<b>STEP 3 · SCORE</b> — TLE staleness ×2.3, critical mission phase ×1.5 → adjusted Pc 1.1e−3.');
+    log(t,'RISK','limitations: TLE 30h → ×2.3 · mission critical → ×1.5');
+    log(t,'RISK','adjusted_pc=1.1e-3 ≥ red 1.0e-3');
+  }
+  // ── phase 4: RED + FSM ──
+  else if(t<T.veto){setStep(4);setBand('RED');setFSM('PLAN');
+    banner('<b>ALERT RED</b> — maneuver prepared: ΔV 1.42 m/s ⊥ rel-velocity · fuel cost 2.1% · Tsiolkovsky Isp 220 s.');
+    log(t,'ALRT','RED — COSMOS 2251 DEB · adjusted_pc 1.1e-3');
+    log(t,'FSM','NOMINAL → PLAN : RED — maneuver prepared (ΔV=1.420 m/s)');
+  }
+  // ── phase 5: veto window ──
+  else if(t<T.vetoEnd){setStep(4);setFSM('AWAIT_GROUND_VETO');
+    $('veto').className='veto show';
+    const rem=T.vetoEnd-t, frac=rem/(T.vetoEnd-T.veto);
+    $('vetot').textContent=String(Math.ceil(frac*300));
+    $('vetoring').style.strokeDashoffset=String(87.96*(1-frac));
+    banner('<b>STEP 4 · DECIDE</b> — ground link up, ΔV 1.42 ≤ 2.0 m/s → autonomous with veto window. Silence = consent.');
+    log(t,'FSM','PLAN → AWAIT_GROUND_VETO : ΔV=1.420 ≤ 2.0 m/s → veto window 300 s');
+  }
+  // ── phase 6: execute / burn ──
+  else if(t<T.burnEnd){setStep(5);setFSM('EXECUTE');$('veto').className='veto';
+    S.burnP=(t-T.exec)/(T.burnEnd-T.exec);
+    S.fuel=87.4-2.1*S.burnP;
+    $('fuel').textContent=fmt(S.fuel,1)+' %';$('fuelbar').style.width=S.fuel+'%';
+    banner('<b>STEP 5 · ACT</b> — thruster firing · BurnCommand on bus · duration 28.4 s (thrust-limited).');
+    $('cmdbox').innerHTML=
+`{ <span class="k">"command_id"</span>: <span class="v">"a91f…c2"</span>,
+  <span class="k">"dv_eci_ms"</span>:  [<span class="v">0.31, −1.12, 0.82</span>],
+  <span class="k">"duration_s"</span>: <span class="v">28.4</span>,
+  <span class="k">"alert_level"</span>: <span class="v">"RED"</span> }`;
+    log(t,'FSM','AWAIT_GROUND_VETO → EXECUTE : veto window expired with no veto');
+    log(t,'BUS','BurnCommand a91f…c2 written → burn_command.json');
+  }
+  // ── phase 7: ack ──
+  else if(t<T.verify){setStep(6);setFSM('VERIFY');S.burnP=1;
+    $('ackbox').innerHTML=
+`{ <span class="k">"command_id"</span>: <span class="v">"a91f…c2"</span>,
+  <span class="k">"status"</span>: <span class="ok">"EXECUTED"</span>,
+  <span class="k">"achieved_dv_ms"</span>: <span class="v">1.418</span>,
+  <span class="k">"fuel_used_kg"</span>: <span class="v">0.0132</span> }`;
+    banner('<b>STEP 6 · VERIFY</b> — ack received: achieved ΔV 1.418 vs commanded 1.420 m/s — within tolerance.');
+    log(t,'ACK','BurnAck a91f…c2 | achieved ΔV=1.418 m/s (expected 1.420) | fuel 13.2 g');
+    log(t,'FSM','EXECUTE → VERIFY : burn issued → verifying ack, re-checking threat');
+  }
+  // ── phase 8: recover ──
+  else if(t<T.nominal){setStep(6);setFSM('RECOVER');
+    const f=(t-T.verify)/(T.nominal-T.verify);
+    S.postMiss=0.82+(5.1-0.82)*Math.min(1,f*1.4);
+    $('t1miss').textContent=fmt(S.postMiss,2)+' km';
+    if(f>0.4){setBand('GREEN');S.adj=4.0e-7;
+      $('t1adj').textContent='4.0e−7';$('t1raw').textContent='3.3e−7';
+      $('t1odds').textContent='≈ 1-in-2,500,000 odds after maneuver — threat resolved.';
+      $('limits').textContent='— none —';}
+    banner('<b>RECOVER</b> — post-burn solution: miss distance now '+fmt(S.postMiss,1)+' km · threat re-scored GREEN.');
+    log(t,'FSM','VERIFY → RECOVER : verify complete (ack_ok=True, threat_clear=True)');
+    log(t,'RISK','re-assessment: miss 5.1 km · adjusted_pc 4.0e-7 → GREEN');
+  }
+  // ── phase 9: back to nominal ──
+  else{setStep(1);setFSM('NOMINAL');S.burnP=0;
+    banner('<b>NOMINAL</b> — event closed and black-box logged. Cycle resumes: full loop ran onboard in one 60-second cycle.');
+    log(t,'FSM','RECOVER → NOMINAL : recovery complete');
+  }
+}
+
+/* ═══════════════════ orbit scene ═══════════════════ */
+const cv=$('cv'),ctx=cv.getContext('2d');
+function resize(){const r=cv.getBoundingClientRect();
+  cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)}
+addEventListener('resize',resize);
+
+const stars=Array.from({length:110},()=>[Math.random(),Math.random(),Math.random()]);
+
+function draw(t){
+  resize();
+  const W=cv.getBoundingClientRect().width,H=460,cx=W/2,cy=H/2;
+  ctx.clearRect(0,0,W,H);
+
+  // stars
+  stars.forEach(([x,y,a])=>{ctx.fillStyle=`rgba(160,180,220,${0.12+0.25*a})`;
+    ctx.fillRect(x*W,y*H,1,1)});
+
+  // Earth
+  const R=86;
+  const g=ctx.createRadialGradient(cx-20,cy-24,10,cx,cy,R);
+  g.addColorStop(0,'#16324f');g.addColorStop(.65,'#0d2138');g.addColorStop(1,'#081527');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle='rgba(90,140,200,.25)';ctx.lineWidth=1;ctx.stroke();
+  // atmosphere
+  ctx.beginPath();ctx.arc(cx,cy,R+5,0,7);
+  ctx.strokeStyle='rgba(77,159,255,.10)';ctx.lineWidth=6;ctx.stroke();
+  // graticule
+  ctx.strokeStyle='rgba(90,140,200,.10)';ctx.lineWidth=.7;
+  for(let i=-2;i<=2;i++){ctx.beginPath();
+    ctx.ellipse(cx,cy,R*.96,Math.abs(R*i/3),0,0,7);ctx.stroke()}
+  for(let i=1;i<4;i++){ctx.beginPath();
+    ctx.ellipse(cx,cy,R*i/3.4,R*.96,0,0,7);ctx.stroke()}
+
+  // ── spacecraft orbit (ellipse), grows slightly after burn ──
+  const grow=8*Math.min(1,Math.max(0,(t-T.exec)/(T.burnEnd-T.exec)))* (t>T.exec?1:0);
+  const oa=178+(t>T.exec?grow:0), ob=130+(t>T.exec?grow*.7:0), tilt=-0.30;
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(tilt);
+  ctx.beginPath();ctx.ellipse(0,0,oa,ob,0,0,7);
+  ctx.strokeStyle='rgba(77,159,255,.4)';ctx.lineWidth=1.1;ctx.stroke();
+  ctx.restore();
+
+  // spacecraft position
+  const w=t*0.42;
+  const sx=cx+Math.cos(tilt)*oa*Math.cos(w)-Math.sin(tilt)*ob*Math.sin(w);
+  const sy=cy+Math.sin(tilt)*oa*Math.cos(w)+Math.cos(tilt)*ob*Math.sin(w);
+
+  // ── threat trajectory: a crossing path ──
+  const active=t>=T.detect&&t<T.nominal;
+  // threat parametric line crossing near spacecraft path
+  const tp=(t*0.062)%1;
+  const t1x=cx-w1(-260),t1y=y1(-260);
+  function w1(u){return u} function y1(u){return cy-150+u*0.42}
+  const thx=cx-260+520*tp, thy=cy-150+520*tp*0.42+40*Math.sin(tp*3);
+
+  // predicted paths (dashed)
+  if(active){
+    ctx.setLineDash([4,5]);ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(57,73,107,.8)';
+    ctx.beginPath();ctx.moveTo(cx-260,cy-150);ctx.lineTo(cx+260,cy+118);ctx.stroke();
+    ctx.setLineDash([]);
+    // closest-approach marker (fixed point near upper-right of orbit)
+    const px=cx+96,py=cy-62;
+    const pulse=1+0.25*Math.sin(t*5);
+    ctx.beginPath();ctx.arc(px,py,7*pulse,0,7);
+    ctx.strokeStyle=S.band==='RED'?'rgba(255,77,94,.85)':'rgba(245,197,66,.8)';
+    ctx.lineWidth=1.4;ctx.stroke();
+    ctx.font='9.5px monospace';ctx.fillStyle='rgba(245,197,66,.85)';
+    ctx.fillText('TCA  miss '+(S.postMiss>1?fmt(S.postMiss,1):'0.82')+' km',px+12,py-4);
+  }
+
+  // threat object
+  if(active){
+    ctx.beginPath();ctx.arc(thx,thy,3.4,0,7);ctx.fillStyle='#ff4d5e';ctx.fill();
+    if(S.band==='RED'){ctx.beginPath();ctx.arc(thx,thy,9+3*Math.sin(t*6),0,7);
+      ctx.strokeStyle='rgba(255,77,94,.4)';ctx.lineWidth=1;ctx.stroke();}
+    ctx.font='9.5px monospace';ctx.fillStyle='rgba(255,120,132,.9)';
+    ctx.fillText('34428 DEB',thx+9,thy+3);
+  }
+
+  // thruster plume during burn
+  if(t>=T.exec&&t<T.burnEnd){
+    const ang=Math.atan2(sy-cy,sx-cx)+Math.PI/2;
+    for(let i=0;i<14;i++){
+      const d=6+Math.random()*22, spread=(Math.random()-.5)*.5;
+      const pxx=sx-Math.cos(ang+spread)*d, pyy=sy-Math.sin(ang+spread)*d;
+      ctx.beginPath();ctx.arc(pxx,pyy,1.4*Math.random()+0.4,0,7);
+      ctx.fillStyle=`rgba(${255},${170+Math.random()*60|0},70,${0.5*Math.random()+0.2})`;
+      ctx.fill();}
+    ctx.font='9.5px monospace';ctx.fillStyle='rgba(255,170,80,.95)';
+    ctx.fillText('ΔV 1.42 m/s',sx+12,sy+14);
+  }
+
+  // spacecraft marker + trail
+  ctx.beginPath();ctx.arc(sx,sy,4.2,0,7);ctx.fillStyle='#4d9fff';ctx.fill();
+  ctx.beginPath();ctx.arc(sx,sy,8,0,7);ctx.strokeStyle='rgba(77,159,255,.35)';
+  ctx.lineWidth=1;ctx.stroke();
+  ctx.font='9.5px monospace';ctx.fillStyle='rgba(150,195,255,.95)';
+  ctx.fillText('EOS-DEMO-01',sx+11,sy-6);
+}
+
+resize();resetState();tick();
+</script>
+</body>
+</html>

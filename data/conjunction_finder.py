@@ -87,6 +87,7 @@ class ConjunctionFinder:
                         'object_id':     obj['id'],
                         'object_name':   obj['name'],
                         'object_type':   obj['type'],
+                        'rcs_size':      obj.get('rcs_size'),
                         'miss_km':       result['miss_km'],
                         'tca_hours':     tca_hours,
                         'tca_time':      result['tca_time'],

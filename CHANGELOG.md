@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0] — 2026-07-19
+
+### Added
+- Dynamic per-encounter hard-body radius: the Space-Track RCS_SIZE class
+  (SMALL/MEDIUM/LARGE) now flows tle_fetcher → conjunction dict → analytic Pc,
+  giving R = own_radius + object_radius per threat (config: hard_body.*).
+  Unknown size falls back to the conservative fixed 20 m — never smaller.
+- dashboard/mission_console.html — self-contained reviewer-facing mission
+  console: animated orbit view, conjunction board, FSM/veto-window display,
+  live command-bus (BurnCommand/BurnAck) panel and decision log, replaying a
+  scripted end-to-end conjunction using the live pipeline field schema.
+
 ## [2.1.0] — 2026-07-16
 
 ### Added

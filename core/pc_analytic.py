@@ -74,6 +74,36 @@ def default_hard_body_radius() -> float:
         return 20.0
 
 
+def dynamic_hard_body_radius(rcs_size: str = None) -> float:
+    """Per-encounter combined hard-body radius (m).
+
+    The TLE itself carries no size, but the Space-Track catalog record does:
+    RCS_SIZE in {SMALL, MEDIUM, LARGE}. When that class is known, the combined
+    radius is own_radius_m + the mapped object radius (config hard_body.*).
+    When it is missing/unknown, fall back to the conservative fixed
+    hard_body_radius_m — unknown size must never shrink the keep-out zone.
+    """
+    fallback = default_hard_body_radius()
+    if not rcs_size:
+        return fallback
+    key = {
+        "SMALL":  "hard_body.rcs_small_radius_m",
+        "MEDIUM": "hard_body.rcs_medium_radius_m",
+        "LARGE":  "hard_body.rcs_large_radius_m",
+    }.get(str(rcs_size).strip().upper())
+    if key is None:
+        return fallback
+    try:
+        from core import config_loader
+        own = float(config_loader.get("hard_body.own_radius_m", 2.0) or 2.0)
+        obj = config_loader.get(key)
+        if obj is None:
+            return fallback
+        return own + float(obj)
+    except Exception:
+        return fallback
+
+
 def _encounter_plane_basis(rel_velocity_ms: np.ndarray):
     """Two orthonormal vectors spanning the plane perpendicular to velocity.
 

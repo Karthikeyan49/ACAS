@@ -195,6 +195,9 @@ class TLEFetcher:
                     'id':         item['NORAD_CAT_ID'],
                     'name':       item.get('OBJECT_NAME', 'UNKNOWN'),
                     'type':       item.get('OBJECT_TYPE', 'UNKNOWN'),
+                    # Radar cross-section class (SMALL/MEDIUM/LARGE) — the TLE
+                    # itself has no size; this drives the dynamic hard-body radius
+                    'rcs_size':   item.get('RCS_SIZE') or None,
                     'line1':      item['TLE_LINE1'],
                     'line2':      item['TLE_LINE2'],
                     'age_hours':  age_hours,

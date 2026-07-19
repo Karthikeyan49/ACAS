@@ -77,7 +77,8 @@ from model import config
 from data.data_pipeline import (impute_missing, clip_outliers,
                                   engineer_features, encode_categoricals)
 from model.lgbm_model import SatelliteRiskRegressor, SatelliteRiskClassifier
-from core.pc_analytic import compute_pc_foster, pc_arbiter, default_hard_body_radius
+from core.pc_analytic import (compute_pc_foster, pc_arbiter,
+                              default_hard_body_radius, dynamic_hard_body_radius)
 from model import calibration
 
 try:
@@ -475,8 +476,11 @@ class LGBMInferenceEngine:
             sigma_m = self._BASE_POS_SIGMA_M * age_scale
             cov = np.eye(3) * (sigma_m ** 2)
 
-            return compute_pc_foster(miss_vec_m, rel_vel_ms, cov,
-                                     self._hard_body_radius_m)
+            # Per-encounter combined radius from the catalog RCS class;
+            # falls back to the conservative fixed radius when size is unknown.
+            hbr = dynamic_hard_body_radius(conj.get("rcs_size"))
+
+            return compute_pc_foster(miss_vec_m, rel_vel_ms, cov, hbr)
         except Exception as e:
             logger.debug(f"analytic Pc failed ({e}) — treating as 0")
             return 0.0
