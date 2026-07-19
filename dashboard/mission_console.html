@@ -477,6 +477,19 @@ function guide(ph){
   if(!DEMO)return; const g=GUIDE[ph]; if(!g||ph===lastGuide)return;
   lastGuide=ph; focusOn(g[0]); $('vocap').textContent=g[1];
 }
+
+/* Encounter choreography: 'approach fraction' (af) is the debris position
+   along its path relative to the predicted conjunction point (Pe).
+   af<0 approaching, af=0 at Pe, af>0 receding. The satellite reaches Pe on
+   its ORIGINAL orbit as af→0; the burn raises the orbit so the satellite is
+   lifted clear by the time the debris arrives. */
+const AF={
+  scan:[-1.45,-1.15], detect:[-1.15,-0.78], predict:[-0.78,-0.5], score:[-0.5,-0.28],
+  decide:[-0.28,-0.12], vetoWin:[-0.12,-0.04], ackHold:[-0.28,-0.06], planHold:[-0.4,-0.18],
+  alertHold:[-0.55,-0.3], clear:[-0.35,0.5],
+  exec:[-0.04,0.06], ack:[0.06,0.16], verify:[0.16,0.3], recover:[0.3,0.62], nominal:[0.62,1.0],
+};
+function afOf(ph,f){const r=AF[ph]||[0,0];return r[0]+(r[1]-r[0])*Math.min(1,Math.max(0,f));}
 function phaseAt(el){let t=0;for(const [n,d] of schedule){if(el<t+d)return[n,(el-t)/d];t+=d}return['end',1]}
 function totalDur(){return schedule.reduce((a,[,d])=>a+d,0)}
 
@@ -734,51 +747,84 @@ function draw(ph,f,el){
 
   const inBurn=ph==='exec';
   const postBurn=['ack','verify','recover','nominal'].includes(ph);
-  const grow=inBurn?8*f:postBurn?8:0;
-  const oa=170+grow, ob=124+grow*.7, tilt=-0.30;
+  const tilt=-0.30, oa0=170, ob0=124;
+  // orbit grows during/after the burn — this is the visible avoidance
+  const grown = inBurn? f : postBurn?1:0;
+  const grow = 26*grown;
+  const oa=oa0+grow, ob=ob0+grow*0.7;
+
+  const opos=(w,a,bx)=>[
+    cx+Math.cos(tilt)*a*Math.cos(w)-Math.sin(tilt)*bx*Math.sin(w),
+    cy+Math.sin(tilt)*a*Math.cos(w)+Math.cos(tilt)*bx*Math.sin(w)];
+
+  // faint ghost of the original orbit once it has been raised
+  if(grow>1.5){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(tilt);ctx.setLineDash([3,5]);
+    ctx.globalAlpha=.55;ctx.beginPath();ctx.ellipse(0,0,oa0,ob0,0,0,7);
+    ctx.strokeStyle=P.dash;ctx.lineWidth=1;ctx.stroke();
+    ctx.globalAlpha=1;ctx.setLineDash([]);ctx.restore();
+  }
+  // current orbit
   ctx.save();ctx.translate(cx,cy);ctx.rotate(tilt);
   ctx.beginPath();ctx.ellipse(0,0,oa,ob,0,0,7);
   ctx.strokeStyle=P.orbit;ctx.lineWidth=1.2;ctx.stroke();ctx.restore();
 
-  const w=el*0.42;
-  const sx=cx+Math.cos(tilt)*oa*Math.cos(w)-Math.sin(tilt)*ob*Math.sin(w);
-  const sy=cy+Math.sin(tilt)*oa*Math.cos(w)+Math.cos(tilt)*ob*Math.sin(w);
+  // ── encounter geometry ───────────────────────────────────────────────────
+  const wE=-0.55, wRate=0.62, SPAN=245;
+  const af=afOf(ph,f);
+  const w=wE+af*wRate;
+  const [sx,sy]=opos(w,oa,ob);            // satellite (on the CURRENT orbit)
+  const [pex,pey]=opos(wE,oa0,ob0);       // predicted conjunction point (Pe)
+  let dh=[0.88,0.50]; const dn=Math.hypot(dh[0],dh[1]); dh=[dh[0]/dn,dh[1]/dn];
+  const thx=pex+dh[0]*af*SPAN, thy=pey+dh[1]*af*SPAN;   // debris converges on Pe
 
-  const active=!['scan','clear','nominal'].includes(ph);
-  const tp=(el*0.062)%1;
-  const thx=cx-250+500*tp, thy=cy-142+500*tp*0.40+38*Math.sin(tp*3);
+  const active=ph!=='scan';
+  const band=$('t1band').textContent, red=band==='RED';
 
   if(active){
-    ctx.setLineDash([4,5]);ctx.lineWidth=1;ctx.strokeStyle=P.dash;
-    ctx.beginPath();ctx.moveTo(cx-250,cy-142);ctx.lineTo(cx+250,cy+112);ctx.stroke();
-    ctx.setLineDash([]);
-    const px=cx+92,py=cy-58, pulse=1+0.25*Math.sin(el*5);
-    const red=$('t1band').textContent==='RED';
-    ctx.beginPath();ctx.arc(px,py,7*pulse,0,7);
-    ctx.strokeStyle=red?P.tcaRed:P.tcaOk;ctx.lineWidth=1.5;ctx.stroke();
+    // debris trajectory (straight line through the conjunction point)
+    ctx.setLineDash([4,6]);ctx.lineWidth=1;ctx.strokeStyle=P.dash;
+    ctx.beginPath();
+    ctx.moveTo(pex-dh[0]*SPAN*1.3,pey-dh[1]*SPAN*1.3);
+    ctx.lineTo(pex+dh[0]*SPAN*1.3,pey+dh[1]*SPAN*1.3);
+    ctx.stroke();ctx.setLineDash([]);
+
+    // predicted conjunction marker (until the burn resolves it)
+    if(!postBurn){
+      const pulse=1+0.25*Math.sin(el*5);
+      ctx.beginPath();ctx.arc(pex,pey,7*pulse,0,7);
+      ctx.strokeStyle=red?P.tcaRed:P.tcaOk;ctx.lineWidth=1.6;ctx.stroke();
+      ctx.font='9.5px monospace';ctx.fillStyle=P.tcaTxt;
+      ctx.fillText('predicted conjunction',pex+12,pey-5);
+    }
+
+    // live separation between satellite and debris
+    ctx.setLineDash([2,3]);ctx.lineWidth=1;
+    ctx.strokeStyle=red&&!postBurn?P.tcaRed:P.tcaOk;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(thx,thy);ctx.stroke();ctx.setLineDash([]);
+    const mx=(sx+thx)/2,my=(sy+thy)/2;
     ctx.font='9.5px monospace';ctx.fillStyle=P.tcaTxt;
-    ctx.fillText('TCA  miss '+$('t1miss').textContent,px+12,py-4);
-    ctx.beginPath();ctx.arc(thx,thy,3.4,0,7);ctx.fillStyle=P.th;ctx.fill();
-    if(red){ctx.beginPath();ctx.arc(thx,thy,9+3*Math.sin(el*6),0,7);
+    ctx.fillText('miss '+$('t1miss').textContent,mx+7,my-4);
+
+    // debris object
+    ctx.beginPath();ctx.arc(thx,thy,3.6,0,7);ctx.fillStyle=P.th;ctx.fill();
+    if(red&&!postBurn){ctx.beginPath();ctx.arc(thx,thy,9+3*Math.sin(el*6),0,7);
       ctx.strokeStyle=P.thHalo;ctx.lineWidth=1;ctx.stroke();}
     ctx.font='9.5px monospace';ctx.fillStyle=P.thTxt;
     ctx.fillText('34428 DEB',thx+9,thy+3);
   }
 
   if(inBurn){
-    // Maneuver burns radially outward (⊥ to the threat's relative velocity),
-    // raising the orbit away from the debris. Show the ΔV direction as an
-    // arrow; the thruster plume fires the opposite way.
+    // Maneuver burns radially outward (⊥ to relative velocity), raising the
+    // orbit clear. Arrow = ΔV direction; plume fires the opposite way.
     const rx=sx-cx, ry=sy-cy, rn=Math.hypot(rx,ry)||1;
-    const ux=rx/rn, uy=ry/rn;                 // outward unit = ΔV direction
-    // plume — opposite to ΔV
+    const ux=rx/rn, uy=ry/rn;
     for(let i=0;i<16;i++){
       const sp=(Math.random()-.5)*.6, ca=Math.cos(sp), sa=Math.sin(sp);
       const dx=-(ux*ca-uy*sa), dy=-(ux*sa+uy*ca), d=6+Math.random()*24;
       ctx.beginPath();ctx.arc(sx+dx*d,sy+dy*d,1.5*Math.random()+0.4,0,7);
       ctx.fillStyle=`rgba(235,120,40,${0.5*Math.random()+0.2})`;ctx.fill();}
-    // ΔV arrow (outward)
-    const aL=32, ex=sx+ux*aL, ey=sy+uy*aL, base=Math.atan2(uy,ux), ah=7;
+    const aL=34, ex=sx+ux*aL, ey=sy+uy*aL, base=Math.atan2(uy,ux), ah=7;
     ctx.strokeStyle=P.plumeTxt;ctx.lineWidth=2.4;
     ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
     ctx.beginPath();ctx.moveTo(ex,ey);
@@ -789,6 +835,7 @@ function draw(ph,f,el){
     ctx.fillText('ΔV '+fmt(scn.a.dv,2)+' m/s ⊥v_rel',ex+7,ey+3);
   }
 
+  // satellite marker
   ctx.beginPath();ctx.arc(sx,sy,4.4,0,7);ctx.fillStyle=P.sc;ctx.fill();
   ctx.beginPath();ctx.arc(sx,sy,8.5,0,7);ctx.strokeStyle=P.scRing;ctx.lineWidth=1;ctx.stroke();
   ctx.font='9.5px monospace';ctx.fillStyle=P.scTxt;
