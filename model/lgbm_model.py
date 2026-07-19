@@ -54,7 +54,14 @@ import pickle
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
-import optuna
+try:
+    # Ground-only dependency: needed solely for hyperparameter tuning.
+    # The inference path must import cleanly without it (OBC constraint) —
+    # catch broadly: on a memory-capped OBC the import can die with
+    # MemoryError rather than ImportError, and either way inference is fine.
+    import optuna
+except Exception:
+    optuna = None
 from typing import Tuple, Dict, List, Optional
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.metrics import (
@@ -66,7 +73,8 @@ from sklearn.metrics import (
 from model import config
 
 logger = logging.getLogger(__name__)
-optuna.logging.set_verbosity(optuna.logging.WARNING)
+if optuna is not None:
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +354,9 @@ def tune_hyperparameters(
     best_params : dict of best hyperparameters
     """
     assert task in ("regression", "classification")
+    if optuna is None:
+        raise ImportError("optuna is required for hyperparameter tuning "
+                          "(ground software only): pip install optuna")
     sb = config.OPTUNA_SEARCH_SPACE
     cat_cols = [c for c in (cat_cols or []) if c in X_train.columns]
 

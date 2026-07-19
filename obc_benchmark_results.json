@@ -1,0 +1,27 @@
+{
+  "benchmark_timestamp": "2026-07-19T09:33:17Z",
+  "system": "ACAS \u2014 Autonomous Collision Avoidance System",
+  "program": "IN-SPACe AI INSPIRED Opportunities \u2014 Edge Intelligence in Orbit",
+  "obc_constraints_simulated": {
+    "cpu_cores": 1,
+    "memory_mb": 512,
+    "reference_hardware": "GomSpace NanoMind A3200 / ISIS iOBC"
+  },
+  "inference_latency_ms": {
+    "avg": 44.02,
+    "min": 42.3,
+    "max": 46.96,
+    "target_ms": 100,
+    "pass": true
+  },
+  "full_cycle_latency_ms": {
+    "value": 46.84,
+    "target_ms": 200,
+    "pass": true
+  },
+  "risk_scorer_latency_ms": 0.036,
+  "memory_mb": 289.3,
+  "lgbm_model_loaded": true,
+  "overall_verdict": "PASS",
+  "suitable_for_obc_deployment": true
+}
