@@ -179,6 +179,20 @@
   .veto .vt{font:11px var(--mono);color:var(--yellow);font-weight:700}
   .veto .vs{font-size:10px;color:var(--dim)}
   footer{padding:4px 20px 14px;color:var(--faint);font-size:10px;letter-spacing:.04em}
+
+  /* ── guided-demo overlays (only in ?demo=1) ─────── */
+  #spotlight{position:fixed;border:2.5px solid var(--accent);border-radius:11px;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent),
+      0 0 26px -3px var(--accent);pointer-events:none;opacity:0;
+    transition:all .5s cubic-bezier(.4,0,.2,1);z-index:50;display:none}
+  #spotlight .wtag{position:absolute;top:-11px;left:14px;background:var(--accent);
+    color:#fff;font:700 9px var(--mono);letter-spacing:.14em;padding:2px 8px;border-radius:4px}
+  #vocap{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
+    background:color-mix(in srgb,var(--txt) 94%,transparent);color:var(--panel);
+    font:600 16px var(--sans);padding:11px 24px;border-radius:10px;
+    box-shadow:0 8px 26px -8px rgba(0,0,0,.45);z-index:51;display:none;
+    max-width:74vw;text-align:center;letter-spacing:.01em}
+  body.demo #spotlight,body.demo #vocap{display:block}
 </style>
 </head>
 <body>
@@ -206,7 +220,7 @@
 
   <!-- ══ LEFT: spacecraft + injection ══ -->
   <div>
-    <div class="panel" style="margin-bottom:14px">
+    <div class="panel" id="scpanel" style="margin-bottom:14px">
       <div class="phead"><h2>Spacecraft</h2><span class="tag">EOS-DEMO-01 · NORAD 99901</span></div>
       <div class="pbody">
         <div class="kv"><label>Propellant</label><output id="fuel">87.4 %</output></div>
@@ -335,7 +349,7 @@
     <div class="phead"><h2>Decision Log</h2><span class="tag">controller · 60 s cycle</span></div>
     <div class="log" id="log"></div>
   </div>
-  <div class="panel buspanel">
+  <div class="panel buspanel" id="buspanel">
     <div class="phead"><h2>Command Bus · HIL</h2><span class="tag">burn_command.json ⇄ burn_ack.json</span></div>
     <div class="pbody">
       <div class="buslabel">BurnCommand → spacecraft</div>
@@ -345,6 +359,9 @@
     </div>
   </div>
 </div>
+
+<div id="spotlight"><span class="wtag">WATCH</span></div>
+<div id="vocap"></div>
 
 <footer>ACAS v2.2 · scenario math mirrors the live pipeline (Foster-form analytic Pc, TLE inflation, fuel-scaled thresholds, FSM gate) · veto window compressed for demo · all fields follow the pipeline schema</footer>
 
@@ -357,6 +374,10 @@ const sci=x=>{if(!isFinite(x)||x<=0)return'0';
   return fmt(m,1)+'e'+(e<0?'−':'+')+String(Math.abs(e))};
 const odds=p=>p<=0?'—':'1-in-'+Math.round(1/p).toLocaleString('en-US');
 const ts=()=>new Date().toISOString().substr(11,8);
+
+/* ═════════════ demo mode ═════════════ */
+const DEMO=new URLSearchParams(location.search).has('demo');
+if(DEMO)document.body.classList.add('demo');
 
 /* ═════════════ theme ═════════════ */
 const root=document.documentElement;
@@ -408,17 +429,53 @@ const DEFAULTS={miss:0.5,spd:14.1,age:30,fuel:87,rcs:'MEDIUM',phase:'critical',g
 let scn=null, schedule=[], scnStart=0, mode='auto', fuelNow=87.4;
 
 function buildSchedule(p,a){
-  const s=[['scan',mode==='auto'?4:1.5],['detect',2],['predict',2.2],['score',2.2],['decide',2]];
+  // DEMO uses timings tuned to the narration; interactive mode keeps the
+  // original pacing.
+  const D=DEMO
+    ?{scan:5.79,detect:2.92,predict:4.29,score:4.96,decide:1.5,veto:3.56,exec:5.25,ack:1.8,verify:1.74,recover:3.76,nominal:5}
+    :{scan:mode==='auto'?4:1.5,detect:2,predict:2.2,score:2.2,decide:2,veto:8,exec:3.5,ack:1.4,verify:2.6,recover:5,nominal:5};
+  const s=[['scan',D.scan],['detect',D.detect],['predict',D.predict],['score',D.score],['decide',D.decide]];
   if(a.band==='GREEN')s.push(['clear',4]);
   else if(a.band==='YELLOW')s.push(['alertHold',5]);
   else if(a.band==='ORANGE')s.push(['planHold',7]);
   else{ // RED
-    if(!p.gc)s.push(['exec',3.5],['ack',1.4],['verify',2.6],['recover',5]);
-    else if(a.dv<=2.0)s.push(['vetoWin',8],['exec',3.5],['ack',1.4],['verify',2.6],['recover',5]);
-    else s.push(['ackHold',6],['exec',3.5],['ack',1.4],['verify',2.6],['recover',5]);
+    if(!p.gc)s.push(['exec',D.exec],['ack',D.ack],['verify',D.verify],['recover',D.recover]);
+    else if(a.dv<=2.0)s.push(['vetoWin',D.veto],['exec',D.exec],['ack',D.ack],['verify',D.verify],['recover',D.recover]);
+    else s.push(['ackHold',6],['exec',D.exec],['ack',D.ack],['verify',D.verify],['recover',D.recover]);
   }
-  s.push(['nominal',5]);
+  s.push(['nominal',D.nominal]);
   return s;
+}
+
+/* spotlight + caption guide (demo only) */
+const GUIDE={
+  scan:['cv','Screening every tracked object around the satellite'],
+  detect:['t1','Close approach detected — debris, 0.5 km, 14 km/s'],
+  predict:['t1','Two independent models estimate the collision risk'],
+  score:['scpanel','Scored against fuel, battery & mission → alert RED'],
+  decide:['veto','Governance gate — a ground-veto window opens'],
+  vetoWin:['veto','Silence = consent · window counting down'],
+  exec:['buspanel','No veto → satellite fires its thruster autonomously'],
+  ack:['buspanel','Burn verified — achieved ΔV matches the command'],
+  verify:['buspanel','Post-burn trajectory re-propagated'],
+  recover:['t1','Threat cleared and re-scored GREEN'],
+  nominal:['stepper','Detect → decide → act — in under a minute, on board'],
+  clear:['t1','Pass is safe — continuing surveillance'],
+  alertHold:['t1','YELLOW — monitoring each cycle'],
+  planHold:['t1','ORANGE — burn staged, awaiting approval'],
+  ackHold:['veto','Oversize burn — holding for explicit ground ACK'],
+};
+function focusOn(id){
+  const el=$(id)||document.querySelector('.'+id); if(!el)return;
+  const r=el.getBoundingClientRect(), sp=$('spotlight'), pad=8;
+  sp.style.left=(r.left-pad)+'px'; sp.style.top=(r.top-pad)+'px';
+  sp.style.width=(r.width+pad*2)+'px'; sp.style.height=(r.height+pad*2)+'px';
+  sp.style.opacity=1;
+}
+let lastGuide='';
+function guide(ph){
+  if(!DEMO)return; const g=GUIDE[ph]; if(!g||ph===lastGuide)return;
+  lastGuide=ph; focusOn(g[0]); $('vocap').textContent=g[1];
 }
 function phaseAt(el){let t=0;for(const [n,d] of schedule){if(el<t+d)return[n,(el-t)/d];t+=d}return['end',1]}
 function totalDur(){return schedule.reduce((a,[,d])=>a+d,0)}
@@ -484,11 +541,12 @@ function tick(){
   if(!scn)startScenario({...DEFAULTS},'auto');
   let el=now-scnStart;
   if(el>totalDur()){
-    if(mode==='auto'){startScenario({...DEFAULTS},'auto');el=0}
-    else el=totalDur()-0.01; // manual: hold on final state
+    if(mode==='auto'&&!DEMO){startScenario({...DEFAULTS},'auto');el=0}
+    else el=totalDur()-0.01; // manual / demo: hold on final state
   }
   const [ph,f]=phaseAt(el);
   scenario(ph,f);
+  guide(ph);
   draw(ph,f,el);
   $('utc').textContent=ts();
   requestAnimationFrame(tick);
