@@ -137,6 +137,11 @@
   .odds{padding:6px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--dim);
     background:var(--panel2)}
   .odds b{color:var(--txt)}
+  .burncard{border-color:var(--accent);
+    box-shadow:0 0 0 1px var(--accent),0 6px 20px -6px color-mix(in srgb,var(--accent) 45%,transparent)}
+  .burncard .thead{background:color-mix(in srgb,var(--accent) 12%,var(--panel2))}
+  .burncard .tcell output{font-size:12.5px}
+  .burncard .band.GREEN{animation:none}
 
   /* ── stepper ────────────────────────────────────── */
   .stepper{display:flex;padding:12px 18px 0}
@@ -168,8 +173,8 @@
   .log .ALRT b{color:var(--red)}
   .buspanel .pbody{font:11px var(--mono)}
   .jsonbox{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
-    padding:8px 10px;margin:6px 0;color:var(--dim);white-space:pre;overflow-x:auto;
-    font-size:10.5px;line-height:1.55}
+    padding:9px 11px;margin:6px 0;color:var(--dim);white-space:pre;overflow-x:auto;
+    font-size:12px;line-height:1.6}
   .jsonbox .k{color:var(--accent)}.jsonbox .v{color:var(--txt)}.jsonbox .ok{color:var(--green)}
   .buslabel{font-size:9px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
   .veto{display:none;align-items:center;gap:10px;padding:8px 10px;margin-bottom:10px;
@@ -320,6 +325,24 @@
           <span>TLE age <b id="t1age">30 h</b></span>
         </div>
         <div class="odds" id="t1odds">≈ 1-in-4,800,000 odds — routine monitoring.</div>
+      </div>
+
+      <!-- maneuver result card — appears during the burn -->
+      <div class="threat burncard" id="burncard" style="display:none">
+        <div class="thead">
+          <span class="name">MANEUVER</span>
+          <span class="sub">COSMOS 2251 DEB · avoidance burn</span>
+          <span class="band RED" id="bcstatus">EXECUTING</span>
+        </div>
+        <div class="tgrid">
+          <div class="tcell"><label>ΔV magnitude</label><output id="bcdv">—</output></div>
+          <div class="tcell"><label>Direction</label><output id="bcdir">⊥ v_rel</output></div>
+          <div class="tcell"><label>Fuel cost</label><output id="bcfuel">—</output></div>
+          <div class="tcell"><label>Commanded ΔV</label><output id="bccmd">—</output></div>
+          <div class="tcell"><label>Achieved ΔV</label><output id="bcach">—</output></div>
+          <div class="tcell"><label>Burn dur</label><output id="bcdur">—</output></div>
+        </div>
+        <div class="odds" id="bcnote">Thruster firing…</div>
       </div>
 
       <div class="threat" id="t2">
@@ -498,6 +521,7 @@ function startScenario(p,m){
   scnStart=performance.now()/1000; fuelNow=p.fuel; logged=new Set(); LOG.innerHTML='';
   $('cmdbox').textContent='— no outstanding command —';
   $('ackbox').textContent='— awaiting —';
+  burnCard(false);
   // static fields
   $('t1spd').textContent=fmt(p.spd,1)+' km/s';
   $('t1age').textContent=p.age+' h';
@@ -521,6 +545,18 @@ function setBand(b){const el=$('t1band');el.textContent=b;el.className='band '+b
   $('t1').className='threat '+(b==='GREEN'?'':b)}
 function setFSM(st){$('fsmchip').textContent=st}
 function banner(html){$('banner').innerHTML=html}
+function burnCard(show,o){
+  const c=$('burncard'); if(!c)return;
+  c.style.display=show?'':'none'; if(!show||!o)return;
+  if(o.status){const b=$('bcstatus');b.textContent=o.status;b.className='band '+(o.band||'RED');}
+  if(o.dv!=null)  $('bcdv').textContent =fmt(o.dv,2)+' m/s';
+  if(o.dir)       $('bcdir').textContent=o.dir;
+  if(o.fuel!=null)$('bcfuel').textContent=fmt(o.fuel,2)+' %';
+  if(o.cmd!=null) $('bccmd').textContent=fmt(o.cmd,3)+' m/s';
+  if(o.ach)       $('bcach').textContent=o.ach;
+  if(o.dur)       $('bcdur').textContent=o.dur;
+  if(o.note)      $('bcnote').textContent=o.note;
+}
 function setFuel(v){$('fuel').textContent=fmt(v,1)+' %';$('fuelbar').style.width=v+'%'}
 
 function readForm(){return{
@@ -656,6 +692,9 @@ function scenario(ph,f){
   <span class="k">"dv_eci_ms"</span>:  [<span class="v">${fmt(a.dv*0.22,2)}, −${fmt(a.dv*0.79,2)}, ${fmt(a.dv*0.58,2)}</span>],
   <span class="k">"duration_s"</span>: <span class="v">${fmt(Math.max(5,a.dv/0.05),1)}</span>,
   <span class="k">"alert_level"</span>: <span class="v">"RED"</span> }`;
+    burnCard(true,{status:'EXECUTING',band:'RED',dv:a.dv,dir:'outward ⊥ v_rel',
+      fuel:a.cost,cmd:a.dv,ach:'— firing —',dur:fmt(Math.max(5,a.dv/0.05),1)+' s',
+      note:'Thruster firing · BurnCommand on the command bus'});
     if(!p.gc)log('FSM','PLAN → EXECUTE : RED + no ground link → autonomous execution (black box)');
     else log('FSM','→ EXECUTE : cleared to burn');
     log('BUS','BurnCommand a91f…c2 written → burn_command.json');
@@ -667,6 +706,8 @@ function scenario(ph,f){
   <span class="k">"status"</span>: <span class="ok">"EXECUTED"</span>,
   <span class="k">"achieved_dv_ms"</span>: <span class="v">${fmt(a.dv*0.9986,3)}</span>,
   <span class="k">"fuel_used_kg"</span>: <span class="v">${fmt(a.cost*0.02,4)}</span> }`;
+    burnCard(true,{status:'VERIFIED',band:'GREEN',ach:fmt(a.dv*0.9986,3)+' m/s',
+      note:'Achieved ΔV within tolerance of the command — burn confirmed'});
     log('ACK',`BurnAck a91f…c2 | achieved ΔV=${fmt(a.dv*0.9986,3)} m/s (expected ${fmt(a.dv,3)}) — within tolerance`);
     log('FSM','EXECUTE → VERIFY : burn issued → verifying ack, re-checking threat');
     banner(`<b>STEP 6 · VERIFY</b> — ack received: achieved ΔV ${fmt(a.dv*0.9986,3)} vs commanded ${fmt(a.dv,3)} m/s.`);
@@ -682,7 +723,8 @@ function scenario(ph,f){
     if(f>0.35){setBand('GREEN');
       $('t1adj').textContent='4.0e−7';$('t1raw').textContent='3.3e−7';
       $('t1odds').textContent='≈ 1-in-2,500,000 odds after maneuver — threat resolved.';
-      $('limits').textContent='— none —';}
+      $('limits').textContent='— none —';
+      burnCard(true,{status:'COMPLETE',band:'GREEN',note:'Maneuver complete — threat cleared and re-scored GREEN'});}
     banner(`<b>RECOVER</b> — post-burn miss ${fmt(nm,1)} km · threat re-scored GREEN.`);
     log('FSM','VERIFY → RECOVER : verify complete (ack_ok=True, threat_clear=True)');
     log('RISK','re-assessment: miss 5.1 km · adjusted_pc 4.0e-7 → GREEN');
