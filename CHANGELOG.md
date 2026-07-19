@@ -9,8 +9,12 @@
   Unknown size falls back to the conservative fixed 20 m — never smaller.
 - dashboard/mission_console.html — self-contained reviewer-facing mission
   console: animated orbit view, conjunction board, FSM/veto-window display,
-  live command-bus (BurnCommand/BurnAck) panel and decision log, replaying a
-  scripted end-to-end conjunction using the live pipeline field schema.
+  live command-bus (BurnCommand/BurnAck) panel and decision log. Light
+  (pleasant) theme by default with a dark toggle. Includes a scenario-
+  injection panel (miss distance, speed, TLE age, fuel, RCS size, mission
+  phase, ground link) that recomputes Pc/band/ΔV with the same formulas the
+  pipeline uses and drives the correct FSM path (veto window, oversize-burn
+  ground ACK, autonomous no-link) end-to-end.
 
 ## [2.1.0] — 2026-07-16
 
